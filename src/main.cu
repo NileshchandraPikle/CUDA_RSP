@@ -11,7 +11,9 @@
 #include "ego_estimation/ego_estimation.hpp"
 #include "ghost_removal/ghost_removal.hpp"
 
-
+__global__ void hell_world_kernel() {
+    printf("Hello, World from GPU!\n");
+}
 int main() 
 {
     // Load radar configuration
@@ -21,7 +23,8 @@ int main()
     // Number of frames to process
     constexpr int NUM_FRAMES = 2;
     
-    // Loop over each frame
+    hell_world_kernel<<<1, 1>>>();
+    cudaDeviceSynchronize();
     for (int frameIndex = 0; frameIndex < NUM_FRAMES; ++frameIndex) {
         std::cout << "Processing frame " << frameIndex + 1 << " of " << NUM_FRAMES << std::endl;
 
@@ -37,8 +40,8 @@ int main()
         // Calculate frame size in bytes
         size_t frame_size = RadarData::frame_size_bytes(frame);
         std::cout << "Frame size in bytes: " << frame_size << std::endl;
-    
-     
+    }
+        /*
         //*********************STEP 1 FFT PROCESSING *******************
         auto start = std::chrono::high_resolution_clock::now();
         fftProcessing::fftProcessPipeline(frame);
@@ -77,8 +80,8 @@ int main()
         std::vector<std::pair<double, double>> doaResults;
 
         start = std::chrono::high_resolution_clock::now();
-        DOAProcessing::compute_music_doa(peakSnaps, doaResults, /*num_sources=*/1);
-        end = std::chrono::high_resolution_clock::now();
+        DOAProcessing::compute_music_doa(peakSnaps, doaResults, /*num_sources=1);*/
+    /*   end = std::chrono::high_resolution_clock::now();
         elapsed = end - start;
         std::cout << "Time taken for DOA processing: " << elapsed.count() << " seconds" << std::endl;
 
@@ -105,6 +108,7 @@ int main()
     
     /*********************STEP 6 RADAR CROSS SECTION *******************/
      // Example radar parameters
+/*
     double transmittedPower = 1.0; // Example: 1 Watt
     double transmitterGain = 10.0; // Example: 10 dB
     double receiverGain = 10.0;    // Example: 10 dB
@@ -120,14 +124,14 @@ int main()
         //std::cout << "Target RCS: " << target.rcs << " m^2" << std::endl;
     }
     /*********************STEP 6 EGO ESTIMATION *******************/
-    double egoSpeed = EgoMotion::estimate_ego_motion(targetList);
+/*    double egoSpeed = EgoMotion::estimate_ego_motion(targetList);
     std::cout << "Estimated Ego Vehicle Speed: " << egoSpeed << " m/s" << std::endl;
   
   	//*********************STEP 7 GHOST TARGET REMOVAL *******************/
-    TargetProcessing::TargetList filteredTargets = GhostRemoval::remove_ghost_targets(targetList, egoSpeed);
+    // TargetProcessing::TargetList filteredTargets = GhostRemoval::remove_ghost_targets(targetList, egoSpeed);
 
     // Output filtered targets
-    std::cout << "Filtered Targets (after ghost removal):" << std::endl;
+/*    std::cout << "Filtered Targets (after ghost removal):" << std::endl;
     for (const auto& target : filteredTargets) {
         std::cout << "Location: (" << target.x << ", " << target.y << ", " << target.z << ")"
             << ", Range: " << target.range
@@ -142,5 +146,5 @@ int main()
     std::cout << "Processing complete. Press any key to exit..." << std::endl;
     std::cin.get();
 
-    return 0;
+    return 0;*/
 }

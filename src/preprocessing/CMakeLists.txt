@@ -1,3 +1,5 @@
+set(CMAKE_CUDA_ARCHITECTURES 75)
+set(CMAKE_CUDA_STANDARD 11)
 
 add_library(preprocessed STATIC fft_processing.cpp)
 target_include_directories(preprocessed PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
