@@ -1,30 +1,26 @@
 #include <iostream>
 #include <chrono> // Include for timing functions
 #include "config/config.hpp"
-#include "data_types/datatypes.hpp"
-#include "preprocessing/fft_processing.hpp"
-#include "peak_detection/peak_detection.hpp"
-#include "mimo_synthesis/mimo_synthesis.hpp"
-#include "doa_processing/doa_processing.hpp"
-#include "target_processing/target_processing.hpp" 
-#include "rcs/rcs.hpp"
-#include "ego_estimation/ego_estimation.hpp"
-#include "ghost_removal/ghost_removal.hpp"
+#include "data_types/datatypes.cuh"
+#include "preprocessing/fft_processing.cuh"
+//#include "peak_detection/peak_detection.hpp"
+//#include "mimo_synthesis/mimo_synthesis.hpp"
+//#include "doa_processing/doa_processing.hpp"
+//#include "target_processing/target_processing.hpp" 
+//#include "rcs/rcs.hpp"
+//#include "ego_estimation/ego_estimation.hpp"
+//#include "ghost_removal/ghost_removal.hpp"
 
-__global__ void hell_world_kernel() {
-    printf("Hello, World from GPU!\n");
-}
+
 int main() 
 {
     // Load radar configuration
 
-    RadarConfig::Config rconfig = RadarConfig::load_config();
+RadarConfig::Config rconfig = RadarConfig::load_config();
 
     // Number of frames to process
     constexpr int NUM_FRAMES = 2;
-    
-    hell_world_kernel<<<1, 1>>>();
-    cudaDeviceSynchronize();
+
     for (int frameIndex = 0; frameIndex < NUM_FRAMES; ++frameIndex) {
         std::cout << "Processing frame " << frameIndex + 1 << " of " << NUM_FRAMES << std::endl;
 
@@ -33,23 +29,40 @@ int main()
             rconfig.num_receivers,
             rconfig.num_chirps,
             rconfig.num_samples,
-            frameIndex // Add this argument
+            frameIndex
         );
 
         std::cout << "Data Initialized" << std::endl;
         // Calculate frame size in bytes
         size_t frame_size = RadarData::frame_size_bytes(frame);
         std::cout << "Frame size in bytes: " << frame_size << std::endl;
-    }
-        /*
+        frame.copy_to_device();
+        // Example: Accessing or modifying a sample value
+        // frame(receiver, chirp, sample) = RadarData::Complex(1.0, 0.0);
+        // std::cout << "Sample value: " << frame(0, 0, 0) << std::endl;
+    
+       
         //*********************STEP 1 FFT PROCESSING *******************
         auto start = std::chrono::high_resolution_clock::now();
         fftProcessing::fftProcessPipeline(frame);
         auto end = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> elapsed = end - start;
         std::cout << "Time taken for fftProcessPipeline: " << elapsed.count() << " seconds" << std::endl;
-    
-        
+        frame.copy_to_host();
+        /*for(int r = 0; r < 3; r++)
+        {
+            for(int c = 0; c < 3; c++)
+            {
+                for(int s = 0; s < 3; s++)
+                {
+                    std::cout<< frame(r, c, s);
+                }
+                std::cout << std::endl;
+            }
+            std::cout<<std::endl;
+        }*/
+    }
+        /*
         //*********************STEP 2 PEAK DETECTION  *******************
         // Declare necessary variables for peak detection
         RadarData::NCI nci;

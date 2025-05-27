@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <complex> 
+#include <cuComplex.h> // Include for cuDoubleComplex
 #include <cstdint> // Include for int16_t
 #include <tuple> // Include for std::tuple
 
@@ -10,8 +11,32 @@ namespace RadarData {
     // Define Real as a 16-bit integer
     using Real = double;
 	using Complex = std::complex<double>;
+    
     // Define Frame as a 3D vector: receivers x chirps x samples
-    using Frame = std::vector<std::vector<std::vector<Complex>>>;
+   struct Frame {
+        Complex* data; // Flattened 1D array
+        int num_receivers;
+        int num_chirps;
+        int num_samples;
+        cuDoubleComplex* d_data; // Device pointer for CUDA
+
+        Frame(int r, int c, int s);
+        
+        
+        ~Frame();
+
+        inline int idx(int receiver, int chirp, int sample) const {
+            return receiver * num_chirps * num_samples + chirp * num_samples + sample;
+        }
+
+        Complex& operator()(int receiver, int chirp, int sample);
+        const Complex& operator()(int receiver, int chirp, int sample) const;
+        void allocate_device();
+        void free_device();
+        void copy_to_device();
+        void copy_to_host();
+        
+    };
     // Function to initialize the frame with random 16-bit integer values
     Frame initialize_frame(int num_receivers, int num_chirps, int num_samples, int frameIndex);
 
