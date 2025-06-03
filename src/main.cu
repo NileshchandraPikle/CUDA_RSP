@@ -3,8 +3,8 @@
 #include "config/config.hpp"
 #include "data_types/datatypes.cuh"
 #include "preprocessing/fft_processing.cuh"
-//#include "peak_detection/peak_detection.hpp"
-//#include "mimo_synthesis/mimo_synthesis.hpp"
+#include "peak_detection/peak_detection.cuh"
+#include "mimo_synthesis/mimo_synthesis.cuh"
 //#include "doa_processing/doa_processing.hpp"
 //#include "target_processing/target_processing.hpp" 
 //#include "rcs/rcs.hpp"
@@ -16,31 +16,31 @@ int main()
 {
     // Load radar configuration
 
-RadarConfig::Config rconfig = RadarConfig::load_config();
+    RadarConfig::Config rconfig = RadarConfig::load_config();
+    RadarData::Frame frame(rconfig.num_receivers, rconfig.num_chirps, rconfig.num_samples);
+    std::cout << "Radar Configuration Loaded:" << std::endl;
+    RadarData::peakInfo peakinfo(rconfig.num_receivers, rconfig.num_chirps, rconfig.num_samples);
 
-    // Number of frames to process
+     // Number of frames to process
     constexpr int NUM_FRAMES = 2;
-
     for (int frameIndex = 0; frameIndex < NUM_FRAMES; ++frameIndex) {
         std::cout << "Processing frame " << frameIndex + 1 << " of " << NUM_FRAMES << std::endl;
 
         // Initialize frame by reading data for the current frame
-        RadarData::Frame frame = RadarData::initialize_frame(
+        RadarData::initialize_frame(
+            frame,
             rconfig.num_receivers,
             rconfig.num_chirps,
             rconfig.num_samples,
             frameIndex
         );
 
-        std::cout << "Data Initialized" << std::endl;
+        //std::cout << "Data Initialized" << std::endl;
         // Calculate frame size in bytes
         size_t frame_size = RadarData::frame_size_bytes(frame);
-        std::cout << "Frame size in bytes: " << frame_size << std::endl;
-        frame.copy_to_device();
-        // Example: Accessing or modifying a sample value
-        // frame(receiver, chirp, sample) = RadarData::Complex(1.0, 0.0);
-        // std::cout << "Sample value: " << frame(0, 0, 0) << std::endl;
-    
+        //std::cout << "Frame size in bytes: " << frame_size << std::endl;
+        frame.copy_frame_to_device();
+      
        
         //*********************STEP 1 FFT PROCESSING *******************
         auto start = std::chrono::high_resolution_clock::now();
@@ -48,53 +48,50 @@ RadarConfig::Config rconfig = RadarConfig::load_config();
         auto end = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> elapsed = end - start;
         std::cout << "Time taken for fftProcessPipeline: " << elapsed.count() << " seconds" << std::endl;
-        frame.copy_to_host();
-        /*for(int r = 0; r < 3; r++)
-        {
-            for(int c = 0; c < 3; c++)
-            {
-                for(int s = 0; s < 3; s++)
-                {
-                    std::cout<< frame(r, c, s);
-                }
-                std::cout << std::endl;
-            }
-            std::cout<<std::endl;
-        }*/
-    }
-        /*
-        //*********************STEP 2 PEAK DETECTION  *******************
-        // Declare necessary variables for peak detection
-        RadarData::NCI nci;
-        RadarData::FoldedNCI foldedNci;
-        RadarData::NoiseEstimation noiseEstimation;
-        RadarData::ThresholdingMap thresholdingMap;
-        RadarData::PeakList peakList;
+        frame.copy_frame_to_host();
+    
+    //*********************STEP 2 PEAK DETECTION  *******************
 
-        start = std::chrono::high_resolution_clock::now();
-        PeakDetection::cfar_peak_detection(frame, nci, foldedNci, noiseEstimation, thresholdingMap, peakList);
+       start = std::chrono::high_resolution_clock::now();
+       PeakDetection::cfar_peak_detection(frame, peakinfo);
         end = std::chrono::high_resolution_clock::now();
         elapsed = end - start;
-        std::cout << "Number of peaks detected: " << peakList.size() << std::endl;
+        
         std::cout << "Time taken for peakDetection: " << elapsed.count() << " seconds" << std::endl;
-    
+        peakinfo.copy_peakInfo_to_host();
+        std::cout << "Number of peaks detected: " << peakinfo.num_peaks << std::endl;
+        // Output detected peaks
+        /*for (int i = 0; i < peakinfo.num_peaks; ++i) {
+            const RadarData::Peak& peak = peakinfo.peakList[i];
+            std::cout << "Peak " << i + 1 << ": Receiver " << peak.receiver
+                      << ", Chirp " << peak.chirp
+                      << ", Sample " << peak.sample
+                      << ", Value " << peak.value << std::endl;
+        }*/
     
         //*********************STEP 3 MIMO SYNTHESIS PEAK SNAP DETECTION  *******************
-        RadarData::PeakSnaps peakSnaps;
-
         start = std::chrono::high_resolution_clock::now();
-        MIMOSynthesis::synthesize_peaks(peakList, frame, peakSnaps);
+        MIMOSynthesis::synthesize_peaks(frame, peakinfo);
         end = std::chrono::high_resolution_clock::now();
         elapsed = end - start;
+        peakinfo.copyPeakSnapsToHost();
         std::cout << "Time taken for MIMO synthesis: " << elapsed.count() << " seconds" << std::endl;
+        // Output synthesized peak snaps
+        for (int i = 0; i < peakinfo.num_peaks; ++i) {
+            //std::cout << "Peak Snap " << i + 1 << ": ";
+            for (int r = 0; r < rconfig.num_receivers; ++r) {
+                //std::cout << peakinfo.peaksnaps[i * rconfig.num_receivers + r] << " ";
+            }
+            //std::cout << std::endl;
+        }
     
-     
+     }
         //*********************STEP 4 DOA PROCESSING  *******************
-        std::vector<std::pair<double, double>> doaResults;
+      /*  std::vector<std::pair<double, double>> doaResults;
 
         start = std::chrono::high_resolution_clock::now();
         DOAProcessing::compute_music_doa(peakSnaps, doaResults, /*num_sources=1);*/
-    /*   end = std::chrono::high_resolution_clock::now();
+    /*  end = std::chrono::high_resolution_clock::now();
         elapsed = end - start;
         std::cout << "Time taken for DOA processing: " << elapsed.count() << " seconds" << std::endl;
 

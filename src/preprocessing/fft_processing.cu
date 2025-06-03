@@ -82,9 +82,7 @@ __global__ void apply_hilbert_transform_samples(cuDoubleComplex* d_data, int num
     int r = gid / num_chirps;
     int c = gid % num_chirps;
     int N = num_samples;
-    if(gid == 0) {
-        printf("Hilbert Transform: Receiver %d, Chirp %d, Samples %d\n", r, c, N);
-    }
+    
     cuDoubleComplex *temp = d_data + (r * num_chirps + c) * N;
 
     fft(temp, N, false);
@@ -124,10 +122,7 @@ __global__ void apply_fft2(cuDoubleComplex* data, int num_receivers, int num_chi
     if (gid >= num_receivers * num_samples) return;
     int r = gid / num_samples;
     int s = gid % num_samples;
-    int N = num_chirps;
-    if(gid == 0) {
-        printf("FFT2: Receiver %d, Sample %d, Chirps %d\n", r, s, N);
-    }
+   
     cuDoubleComplex temp[128];
     for (int c = 0; c < num_chirps; ++c) {
         temp[c] = data[(r * num_chirps + c) * num_samples + s];

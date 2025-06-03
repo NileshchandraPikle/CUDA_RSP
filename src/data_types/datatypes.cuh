@@ -19,7 +19,8 @@ namespace RadarData {
         int num_chirps;
         int num_samples;
         cuDoubleComplex* d_data; // Device pointer for CUDA
-
+        
+        // Constructor to initialize the frame with given dimensions
         Frame(int r, int c, int s);
         
         
@@ -31,26 +32,73 @@ namespace RadarData {
 
         Complex& operator()(int receiver, int chirp, int sample);
         const Complex& operator()(int receiver, int chirp, int sample) const;
-        void allocate_device();
+       
+        
+
+        void allocate_frame_mem_device();
         void free_device();
-        void copy_to_device();
-        void copy_to_host();
+        void copy_frame_to_device();
+        void copy_frame_to_host();
         
     };
     // Function to initialize the frame with random 16-bit integer values
-    Frame initialize_frame(int num_receivers, int num_chirps, int num_samples, int frameIndex);
+    void  initialize_frame(Frame &frame, int num_receivers, int num_chirps, int num_samples, int frameIndex);
 
     // Function to calculate frame size in bytes
     size_t frame_size_bytes(const Frame& frame);
+    
+    struct Peak {
+        int receiver;
+        int chirp;
+        int sample;
+        double value;
+    };
+    struct peakInfo {
+        int num_receivers;
+        int num_chirps;
+        int num_samples;
+        double value;
+        int max_num_peaks;
+        int num_peaks;
 
-    // Define NCI, folded NCI, noise estimation, thresholding map, and Peak List
-    using NCI = std::vector<std::vector<Real>>;
-    using FoldedNCI = std::vector<std::vector<Real>>;
-    using NoiseEstimation = std::vector<std::vector<Real>>;
-    using ThresholdingMap = std::vector<std::vector<Real>>;
-    using PeakList = std::vector<std::tuple<int, int, int>>;
-    using PeakSnaps = std::vector<std::vector<std::complex<double>>>;
-	using PeakSnap = std::vector<std::complex<double>>;
+        double* nci;
+        double* foldedNci;
+        double* noiseEstimation;
+        double* thresholdingMap;
+        Peak * peakList;
+        
+        Complex* peaksnaps;
+
+
+
+        double* d_nci;
+        double* d_foldedNci;
+        double* d_noiseEstimation;
+        double* d_thresholdingMap;
+        int *d_peak_counter;
+        int* d_num_peaks; // Device variable to hold number of peaks
+        
+        cuDoubleComplex* d_peaksnaps;
+        Peak* d_peakList;
+
+        peakInfo(int r, int c, int s);
+
+        ~peakInfo();
+        void allocate_peakInfo_mem_host();    
+        void allocate_peakInfo_mem_device();        
+        
+        void copy_peakInfo_to_host();
+        
+        void free_peakInfo_device();
+        void free_peakInfo_host();
+        
+        void cfar_peak_detection();
+
+        void initializePeakSnaps();
+        void freePeakSnaps();
+        void copyPeakSnapsToHost();
+    };
+    
 }
 
 #endif // DATA_TYPES_H
