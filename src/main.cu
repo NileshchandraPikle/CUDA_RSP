@@ -5,8 +5,9 @@
 #include "preprocessing/fft_processing.cuh"
 #include "peak_detection/peak_detection.cuh"
 #include "mimo_synthesis/mimo_synthesis.cuh"
-//#include "doa_processing/doa_processing.hpp"
-//#include "target_processing/target_processing.hpp" 
+#include "doa_processing/doa_processing.cuh"
+// #include "target_processing/target_processing.hpp" 
+#include "target_processing/target_processing.cuh"
 //#include "rcs/rcs.hpp"
 //#include "ego_estimation/ego_estimation.hpp"
 //#include "ghost_removal/ghost_removal.hpp"
@@ -85,37 +86,43 @@ int main()
             //std::cout << std::endl;
         }
     
-     }
+    
+     
         //*********************STEP 4 DOA PROCESSING  *******************
-      /*  std::vector<std::pair<double, double>> doaResults;
+        RadarData::DoAInfo doaInfo(peakinfo.num_peaks,rconfig.num_receivers);
+        doaInfo.initialize();
 
         start = std::chrono::high_resolution_clock::now();
-        DOAProcessing::compute_music_doa(peakSnaps, doaResults, /*num_sources=1);*/
-    /*  end = std::chrono::high_resolution_clock::now();
+        DOAProcessing::compute_music_doa(peakinfo, doaInfo,/*num_sources=*/1);
+        end = std::chrono::high_resolution_clock::now();
         elapsed = end - start;
         std::cout << "Time taken for DOA processing: " << elapsed.count() << " seconds" << std::endl;
+        //*********************STEP 5 TARGET DETECTION (GPU) *******************
+        RadarData::TargetResults targetResults(peakinfo.num_peaks);
+        start = std::chrono::high_resolution_clock::now();
+        TargetProcessing::detect_targets_gpu(
+            peakinfo.d_peaksnaps,
+            doaInfo.d_angles,
+            peakinfo.num_peaks,
+            rconfig.num_receivers,
+            targetResults
+        );
+        end = std::chrono::high_resolution_clock::now();
+        elapsed = end - start;
+        std::cout << "Time taken for target processing: " << elapsed.count() << " seconds" << std::endl;
+        targetResults.copy_to_host();
 
-        // Output DOA results for the current frame
-        std::cout << "DOA Results (Azimuth, Elevation) for frame " << frameIndex + 1 << ":" <<doaResults.size()<<std::endl;
-        for (const auto& result : doaResults) {
-            //std::cout << "(" << result.first << ", " << result.second << ")" << std::endl;
-        }
-        std::cout << "peaksnap size = " << peakSnaps.size() << std::endl;
-    
-       
-        //*********************STEP 5 TARGET DETECTION *******************
-        TargetProcessing::TargetList targetList = TargetProcessing::detect_targets(peakSnaps, doaResults);
-
-        std::cout << "Targets detected:" << std::endl;
-        for (const auto& target : targetList) {
+        /*std::cout << "Targets detected:" << std::endl;
+        for (int i = 0; i < targetResults.num_targets; ++i) {
+            const auto& target = targetResults.targets[i];
             std::cout << "Location: (" << target.x << ", " << target.y << ", " << target.z << ")"
                 << ", Range: " << target.range
                 << ", Azimuth: " << target.azimuth
                 << ", Elevation: " << target.elevation
                 << ", Strength: " << target.strength << ", Relative Speed: " << target.relativeSpeed << std::endl;
-        }
+        }*/
     
-    
+  /*  
     /*********************STEP 6 RADAR CROSS SECTION *******************/
      // Example radar parameters
 /*
@@ -137,12 +144,11 @@ int main()
 /*    double egoSpeed = EgoMotion::estimate_ego_motion(targetList);
     std::cout << "Estimated Ego Vehicle Speed: " << egoSpeed << " m/s" << std::endl;
   
-  	//*********************STEP 7 GHOST TARGET REMOVAL *******************/
+    //*********************STEP 7 GHOST TARGET REMOVAL *******************/
     // TargetProcessing::TargetList filteredTargets = GhostRemoval::remove_ghost_targets(targetList, egoSpeed);
 
-    // Output filtered targets
-/*    std::cout << "Filtered Targets (after ghost removal):" << std::endl;
-    for (const auto& target : filteredTargets) {
+    // Output filtered targets/*    std::cout << "Filtered Targets (after ghost removal):" << std::endl;
+ /*    for (const auto& target : filteredTargets) {
         std::cout << "Location: (" << target.x << ", " << target.y << ", " << target.z << ")"
             << ", Range: " << target.range
             << ", Azimuth: " << target.azimuth
@@ -150,11 +156,12 @@ int main()
             << ", Strength: " << target.strength
             << ", Relative Speed: " << target.relativeSpeed << std::endl;
     }
-	std::cout << "Number of targets after ghost removal: " << filteredTargets.size() << std::endl;
+    std::cout << "Number of targets after ghost removal: " << filteredTargets.size() << std::endl;
   }
     // Keep the terminal display until a key is pressed
     std::cout << "Processing complete. Press any key to exit..." << std::endl;
     std::cin.get();
-
-    return 0;*/
+*/
+    }
+    return 0; 
 }

@@ -10,7 +10,7 @@
 namespace RadarData {
     // Define Real as a 16-bit integer
     using Real = double;
-	using Complex = std::complex<double>;
+    using Complex = std::complex<double>;
     
     // Define Frame as a 3D vector: receivers x chirps x samples
    struct Frame {
@@ -40,7 +40,7 @@ namespace RadarData {
         void copy_frame_to_device();
         void copy_frame_to_host();
         
-    };
+    };// Frame
     // Function to initialize the frame with random 16-bit integer values
     void  initialize_frame(Frame &frame, int num_receivers, int num_chirps, int num_samples, int frameIndex);
 
@@ -52,6 +52,30 @@ namespace RadarData {
         int chirp;
         int sample;
         double value;
+    };// Peak
+
+    struct Target {
+        double x, y, z;
+        double range;
+        double azimuth;
+        double elevation;
+        double strength;
+        double relativeSpeed;
+    };
+
+    class TargetResults {
+    public:
+        Target* targets; // Host array
+        Target* d_targets; // Device array
+        int num_targets;
+
+        TargetResults(int max_targets);
+        ~TargetResults();
+        void allocate_host(int max_targets);
+        void allocate_device(int max_targets);
+        void free_host();
+        void free_device();
+        void copy_to_host();
     };
     struct peakInfo {
         int num_receivers;
@@ -97,7 +121,58 @@ namespace RadarData {
         void initializePeakSnaps();
         void freePeakSnaps();
         void copyPeakSnapsToHost();
+    };// peakInfo
+
+    struct DoAangles{
+        double azimuth;
+        double elevation;
     };
+    
+    struct DoAInfo{
+    DoAangles *angles;
+    DoAangles *d_angles; // Device pointer for CUDA
+    int num_peaks;
+    int num_receivers;
+    Complex *R;
+    cuDoubleComplex *d_R;//Covariance matrix on device
+    double* eigenvalues;
+    double * eigenvectors;
+    double* d_eigenvalues; // Eigenvalues on device
+    cuDoubleComplex* d_eigenvectors; // Eigenvectors on device
+    cuDoubleComplex* d_eigenvector; // Eigenvector on device
+    cuDoubleComplex * d_next_eigenvector; // Next eigenvector on device
+    cuDoubleComplex *d_noiseSubspace; // Noise subspace on device
+    cuDoubleComplex *d_steeringVector; // Steering vector on device
+    
+
+    DoAInfo(int num_peaks, int num_receivers);
+    
+    ~DoAInfo();
+    void allocate_angles_mem_host();
+    void allocate_angles_mem_device();
+    void free_angles_device();
+    void free_angles_host();
+
+    void copy_angles_to_host();
+
+    void allocate_R_mem_host();
+    void allocate_R_mem_device();
+    void free_R_host();
+    void free_R_device();
+    
+    void copy_R_to_host();
+    
+    void init_eigenData();
+    void free_eigenData();
+    void copy_eigenData_to_host();
+
+    void initialize();
+    
+    void init_noiseSubspace();
+    void free_noiseSubspace();
+    void init_steeringVector();
+    void free_steeringVector();
+};// DoAInfo
     
 }
 

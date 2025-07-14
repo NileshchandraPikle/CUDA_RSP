@@ -18,8 +18,8 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/src/data_types)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/src/preprocessing)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/src/peak_detection)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/src/mimo_synthesis)
-#add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/src/doa_processing)
-#add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/src/target_processing)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/src/doa_processing)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/src/target_processing)
 #add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/src/rcs)
 #add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/src/ego_estimation)
 #add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/src/ghost_removal)
@@ -30,6 +30,8 @@ target_link_libraries(rsp PUBLIC
                       preprocessed
                       peakdetection
                       mimo
+                      doa
+                      target
                       )
                       
 

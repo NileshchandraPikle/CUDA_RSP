@@ -272,4 +272,225 @@ void peakInfo::copyPeakSnapsToHost() {
     }
 } // copyPeakSnapsToHost
 
+
+
+
+DoAInfo::DoAInfo(int num_peaks, int num_receivers)
+    : num_peaks(num_peaks), num_receivers(num_receivers), angles(nullptr), d_angles(nullptr), d_R(nullptr), 
+      d_eigenvectors(nullptr), d_eigenvalues(nullptr), d_eigenvector(nullptr), d_next_eigenvector(nullptr), 
+      d_noiseSubspace(nullptr), d_steeringVector(nullptr), R(nullptr), eigenvalues(nullptr), eigenvectors(nullptr){
+    // Initialize any required resources
+    initialize();
+    
+}
+DoAInfo::~DoAInfo() {
+    free_angles_host();
+    free_angles_device();
+    free_R_device();
+    free_eigenData();
+    free_noiseSubspace();
+    free_steeringVector();
+    free_R_host();
+}
+
+void DoAInfo::allocate_angles_mem_host() {
+    if (!angles) {
+        angles = new DoAangles[num_peaks];
+        memset(angles, 0, num_peaks * sizeof(DoAangles));
+    }
+} // allocate_angles_mem_host
+
+void DoAInfo::free_angles_host() {
+    delete[] angles;
+    angles = nullptr;
+} // free_angles_host
+void DoAInfo::allocate_angles_mem_device() {
+    if (!d_angles) {
+        CUDA_CHECK(cudaMalloc(&d_angles, num_peaks * sizeof(DoAangles)));
+        CUDA_CHECK(cudaMemset(d_angles, 0, num_peaks * sizeof(DoAangles)));
+    }
+} // allocate_angles_mem_device
+void DoAInfo::free_angles_device() {
+    if (d_angles) {
+        CUDA_CHECK(cudaFree(d_angles));
+        d_angles = nullptr;
+    }
+} // free_angles_device
+void DoAInfo::copy_angles_to_host() {
+    if (d_angles) {
+        CUDA_CHECK(cudaMemcpy(angles, d_angles, num_peaks * sizeof(DoAangles), cudaMemcpyDeviceToHost));
+    }
+} // copy_angles_to_host
+void DoAInfo::initialize() {
+    allocate_angles_mem_host();
+    allocate_angles_mem_device();
+    allocate_R_mem_device();    
+    init_eigenData();
+    init_noiseSubspace();
+    init_steeringVector();
+    allocate_R_mem_host();
+} // initialize
+
+void DoAInfo::allocate_R_mem_device() {
+    if (!d_R) {
+        size_t size = num_peaks*num_receivers * num_receivers * sizeof(cuDoubleComplex);
+        CUDA_CHECK(cudaMalloc(&d_R, size));
+        CUDA_CHECK(cudaMemset(d_R, 0, size));
+    }
+
+} // allocate_R_mem_device
+void DoAInfo::free_R_device() {
+    if (d_R) {
+        CUDA_CHECK(cudaFree(d_R));
+        d_R = nullptr;
+    }
+} // free_R_device
+
+void DoAInfo::init_eigenData() {
+    if (!d_eigenvectors) {
+        size_t size = num_peaks*num_receivers * num_receivers * sizeof(cuDoubleComplex);
+        CUDA_CHECK(cudaMalloc(&d_eigenvectors, size));
+        CUDA_CHECK(cudaMemset(d_eigenvectors, 0, size));
+    }
+    if (!d_eigenvalues) {
+        CUDA_CHECK(cudaMalloc(&d_eigenvalues, num_peaks*num_receivers * sizeof(double)));
+        CUDA_CHECK(cudaMemset(d_eigenvalues, 0, num_peaks*num_receivers * sizeof(double)));
+    }
+    if (!d_eigenvector) {
+        CUDA_CHECK(cudaMalloc(&d_eigenvector, num_peaks*num_receivers * sizeof(cuDoubleComplex)));
+        CUDA_CHECK(cudaMemset(d_eigenvector, 0, num_peaks*num_receivers * sizeof(cuDoubleComplex)));
+    }
+    if (!d_next_eigenvector) {
+        CUDA_CHECK(cudaMalloc(&d_next_eigenvector, num_peaks*num_receivers * sizeof(cuDoubleComplex)));
+        CUDA_CHECK(cudaMemset(d_next_eigenvector, 0, num_peaks*num_receivers * sizeof(cuDoubleComplex)));
+    }
+    if(!eigenvalues) {
+        eigenvalues = new double[num_peaks*num_receivers];
+        memset(eigenvalues, 0, num_peaks*num_receivers * sizeof(double));
+    }
+    if(!eigenvectors) {
+        eigenvectors = new double[num_peaks*num_receivers * num_receivers];
+        memset(eigenvectors, 0, num_peaks*num_receivers * num_receivers * sizeof(double));
+    }
+} // init_eigenData
+void DoAInfo::free_eigenData() {
+    if (d_eigenvectors) {
+        CUDA_CHECK(cudaFree(d_eigenvectors));
+        d_eigenvectors = nullptr;
+    }
+    if (d_eigenvalues) {
+        CUDA_CHECK(cudaFree(d_eigenvalues));
+        d_eigenvalues = nullptr;
+    }
+    if (d_eigenvector) {
+        CUDA_CHECK(cudaFree(d_eigenvector));
+        d_eigenvector = nullptr;
+    }
+    if (d_next_eigenvector) {
+        CUDA_CHECK(cudaFree(d_next_eigenvector));
+        d_next_eigenvector = nullptr;
+    }
+    if (eigenvalues) {
+        delete[] eigenvalues;
+        eigenvalues = nullptr;
+    }
+} // free_eigenData
+
+void DoAInfo::copy_eigenData_to_host() {
+    if (d_eigenvectors) {
+        size_t size = num_peaks*num_receivers * num_receivers * sizeof(cuDoubleComplex);
+        CUDA_CHECK(cudaMemcpy(reinterpret_cast<cuDoubleComplex*>(R), d_eigenvectors, size, cudaMemcpyDeviceToHost));
+    }
+    if (d_eigenvalues) {
+        CUDA_CHECK(cudaMemcpy(eigenvalues, d_eigenvalues, num_peaks*num_receivers * sizeof(double), cudaMemcpyDeviceToHost));
+    }
+} // copy_eigenData_to_host
+void DoAInfo::init_noiseSubspace() {
+    if (!d_noiseSubspace) {
+        size_t size = num_peaks * num_receivers * sizeof(cuDoubleComplex);
+        CUDA_CHECK(cudaMalloc(&d_noiseSubspace, size));
+        CUDA_CHECK(cudaMemset(d_noiseSubspace, 0, size));
+    }
+} // init_noiseSubspace
+void DoAInfo::free_noiseSubspace() {
+    if (d_noiseSubspace) {
+        CUDA_CHECK(cudaFree(d_noiseSubspace));
+        d_noiseSubspace = nullptr;
+    }
+} // free_noiseSubspace
+void DoAInfo::init_steeringVector() {
+    if (!d_steeringVector) {
+        size_t size = num_peaks * num_receivers * sizeof(cuDoubleComplex);
+        CUDA_CHECK(cudaMalloc(&d_steeringVector, size));
+        CUDA_CHECK(cudaMemset(d_steeringVector, 0, size));
+    }
+} // init_steeringVector
+void DoAInfo::free_steeringVector() {
+    if (d_steeringVector) {
+        CUDA_CHECK(cudaFree(d_steeringVector));
+        d_steeringVector = nullptr;
+    }
+} // free_steeringVector
+void DoAInfo::copy_R_to_host() {
+    if (d_R) {
+        size_t size = num_peaks*num_receivers * num_receivers * sizeof(cuDoubleComplex);
+        CUDA_CHECK(cudaMemcpy(reinterpret_cast<cuDoubleComplex*>(R), d_R, size, cudaMemcpyDeviceToHost));
+    }
+} // copy_R_to_host
+void DoAInfo::allocate_R_mem_host() {
+    if (!R) {
+        R = new Complex[num_peaks*num_receivers * num_receivers];
+        memset(R, 0, num_peaks*num_receivers * num_receivers * sizeof(Complex));
+    }
+} // allocate_R_mem_host
+void DoAInfo::free_R_host() {
+    delete[] R;
+    R = nullptr;
+} // free_R_host
+
+TargetResults::TargetResults(int max_targets)
+    : targets(nullptr), d_targets(nullptr), num_targets(max_targets) {
+    allocate_host(max_targets);
+    allocate_device(max_targets);
+}
+
+TargetResults::~TargetResults() {
+    free_host();
+    free_device();
+}
+
+void TargetResults::allocate_host(int max_targets) {
+    if (!targets) {
+        targets = new Target[max_targets];
+        memset(targets, 0, max_targets * sizeof(Target));
+    }
+}
+
+void TargetResults::allocate_device(int max_targets) {
+    if (!d_targets) {
+        CUDA_CHECK(cudaMalloc(&d_targets, max_targets * sizeof(Target)));
+        CUDA_CHECK(cudaMemset(d_targets, 0, max_targets * sizeof(Target)));
+    }
+}
+
+void TargetResults::free_host() {
+    if (targets) {
+        delete[] targets;
+        targets = nullptr;
+    }
+}
+
+void TargetResults::free_device() {
+    if (d_targets) {
+        CUDA_CHECK(cudaFree(d_targets));
+        d_targets = nullptr;
+    }
+}
+
+void TargetResults::copy_to_host() {
+    if (d_targets && targets) {
+        CUDA_CHECK(cudaMemcpy(targets, d_targets, num_targets * sizeof(Target), cudaMemcpyDeviceToHost));
+    }
+}
+
 } // namespace RadarData
