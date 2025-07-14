@@ -1,3 +1,4 @@
+
 #include <iostream>
 #include <chrono> // Include for timing functions
 #include "config/config.hpp"
@@ -6,11 +7,10 @@
 #include "peak_detection/peak_detection.cuh"
 #include "mimo_synthesis/mimo_synthesis.cuh"
 #include "doa_processing/doa_processing.cuh"
-// #include "target_processing/target_processing.hpp" 
 #include "target_processing/target_processing.cuh"
-//#include "rcs/rcs.hpp"
-//#include "ego_estimation/ego_estimation.hpp"
-//#include "ghost_removal/ghost_removal.hpp"
+#include "rcs/rcs.cuh"
+#include "ego_estimation/ego_estimation.cuh"
+#include "ghost_removal/ghost_removal.cuh"
 
 
 int main() 
@@ -112,56 +112,52 @@ int main()
         std::cout << "Time taken for target processing: " << elapsed.count() << " seconds" << std::endl;
         targetResults.copy_to_host();
 
-        /*std::cout << "Targets detected:" << std::endl;
+        //*********************STEP 6 RCS ESTIMATION (GPU) *******************
+        double transmittedPower = 1.0; // Example: 1 Watt
+        double transmitterGain = 10.0; // Example: 10 dB
+        double receiverGain = 10.0;    // Example: 10 dB
+        start = std::chrono::high_resolution_clock::now();
+        RCSEstimation::estimate_rcs_gpu(
+            targetResults,
+            transmittedPower,
+            transmitterGain,
+            receiverGain,
+            RadarConfig::WAVELENGTH
+        );
+        end = std::chrono::high_resolution_clock::now();
+        elapsed = end - start;
+        targetResults.copy_to_host();
+        std::cout << "Time taken for RCS estimation: " << elapsed.count() << " seconds" << std::endl;
+
+        std::cout << "Targets detected:" << std::endl;
         for (int i = 0; i < targetResults.num_targets; ++i) {
-            const auto& target = targetResults.targets[i];
+            //const auto& target = targetResults.targets[i];
+            //std::cout << "RCS: " << targetResults.targets[i].rcs << " m^2" << std::endl;
+        }
+       
+        /*********************STEP 6 EGO ESTIMATION (GPU) *******************/
+        double egoSpeed = EgoMotion::estimate_ego_motion_gpu(targetResults.d_targets, targetResults.num_targets);
+        std::cout << "Estimated Ego Vehicle Speed (GPU): " << egoSpeed << " m/s" << std::endl;
+        
+        //*********************STEP 7 GHOST TARGET REMOVAL *******************/
+        RadarData::TargetResults filteredResults = GhostRemoval::remove_ghost_targets(targetResults, egoSpeed);
+
+        // Output filtered targets
+        std::cout << "Filtered Targets (after ghost removal):" << std::endl;
+        for (int i = 0; i < filteredResults.num_targets; i++) {
+            const auto& target = filteredResults.targets[i];
             std::cout << "Location: (" << target.x << ", " << target.y << ", " << target.z << ")"
-                << ", Range: " << target.range
-                << ", Azimuth: " << target.azimuth
-                << ", Elevation: " << target.elevation
-                << ", Strength: " << target.strength << ", Relative Speed: " << target.relativeSpeed << std::endl;
-        }*/
-    
-  /*  
-    /*********************STEP 6 RADAR CROSS SECTION *******************/
-     // Example radar parameters
-/*
-    double transmittedPower = 1.0; // Example: 1 Watt
-    double transmitterGain = 10.0; // Example: 10 dB
-    double receiverGain = 10.0;    // Example: 10 dB
-
-    // Detect targets
-    TargetProcessing::TargetList targets = TargetProcessing::detect_targets(peakSnaps, doaResults);
-
-    // Estimate RCS for each target
-    RCSEstimation::estimate_rcs(targets, transmittedPower, transmitterGain, receiverGain);
-
-    // Output results
-    for (const auto& target : targets) {
-        //std::cout << "Target RCS: " << target.rcs << " m^2" << std::endl;
+                    << ", Range: " << target.range
+                    << ", Azimuth: " << target.azimuth
+                    << ", Elevation: " << target.elevation
+                << ", Strength: " << target.strength
+                << ", Relative Speed: " << target.relativeSpeed << std::endl;
+        }
+        std::cout << "Number of targets after ghost removal: " << filteredResults.num_targets << std::endl;
+        
+        std::cout << "Processing complete. Press any key to exit..." << std::endl;
+        std::cin.get();
     }
-    /*********************STEP 6 EGO ESTIMATION *******************/
-/*    double egoSpeed = EgoMotion::estimate_ego_motion(targetList);
-    std::cout << "Estimated Ego Vehicle Speed: " << egoSpeed << " m/s" << std::endl;
-  
-    //*********************STEP 7 GHOST TARGET REMOVAL *******************/
-    // TargetProcessing::TargetList filteredTargets = GhostRemoval::remove_ghost_targets(targetList, egoSpeed);
 
-    // Output filtered targets/*    std::cout << "Filtered Targets (after ghost removal):" << std::endl;
- /*    for (const auto& target : filteredTargets) {
-        std::cout << "Location: (" << target.x << ", " << target.y << ", " << target.z << ")"
-            << ", Range: " << target.range
-            << ", Azimuth: " << target.azimuth
-            << ", Elevation: " << target.elevation
-            << ", Strength: " << target.strength
-            << ", Relative Speed: " << target.relativeSpeed << std::endl;
-    }
-    std::cout << "Number of targets after ghost removal: " << filteredTargets.size() << std::endl;
-  }
-    // Keep the terminal display until a key is pressed
-    std::cout << "Processing complete. Press any key to exit..." << std::endl;
-    std::cin.get();
-*/
-    }
     return 0; 
 }

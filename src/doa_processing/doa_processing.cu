@@ -190,93 +190,11 @@ void compute_music_doa(const RadarData::peakInfo& peakinfo,
         doAInfo.d_eigenvalues,doAInfo.d_eigenvector, doAInfo.d_eigenvectors, doAInfo.d_next_eigenvector, doAInfo.d_noiseSubspace, doAInfo.d_angles);
     cudaDeviceSynchronize();
     doAInfo.copy_angles_to_host();
-    for(int i = 0; i < peakinfo.num_peaks; ++i) {
+    /*for(int i = 0; i < peakinfo.num_peaks; ++i) {
         std::cout << "Peak " << i + 1 << ": Azimuth = " 
         << doAInfo.angles[i].azimuth << ", Elevation = " 
         << doAInfo.angles[i].elevation << std::endl;
-    }
-    //doAInfo.copy_R_to_host();
-        
-        /*for(int i = 0; i < peakinfo.num_peaks; ++i) {
-            for(int j = 0; j < num_receivers; ++j) {
-                for(int k = 0; k < num_receivers; ++k) {
-                    std::cout << "R[" << i << "][" << j << "][" << k << "] = " 
-                    << doAInfo.R[i * num_receivers * num_receivers + j * num_receivers + k].real() << " + "
-                    << doAInfo.R[i * num_receivers * num_receivers + j * num_receivers + k].imag() << "i" << std::endl;
-                }
-            }
-        }// end for loop*/
-        //copy eigendata to host
-        //doAInfo.copy_eigenData_to_host();
-        /*for(int i = 0; i < peakinfo.num_peaks; ++i) {
-            for(int j = 0; j < num_receivers; ++j) {
-                std::cout << "Eigenvalue[" << i << "][" << j << "] = " 
-                << doAInfo.eigenvalues[i * num_receivers + j] << std::endl;
-            }
-        }// end for loop*/
+    }*/
 
-
-
-
-        
-         
-       /*
-        // Iterate over each peak snap
-        for (const auto& snap : peakSnaps) {
-            int num_receivers = snap.size();
-            if (num_receivers < num_sources) {
-                cerr << "Insufficient receivers for MUSIC algorithm." << endl;
-                continue;
-            }
-
-            // Compute the covariance matrix
-            auto R = compute_covariance(snap);
-
-            // Perform eigenvalue decomposition
-            pair<vector<double>, vector<vector<complex<double>>>> eigen_result =
-                eigen_decomposition(R);
-            vector<double> eigenvalues = eigen_result.first;
-            vector<vector<complex<double>>> eigenvectors = eigen_result.second;
-
-            // Separate signal and noise subspaces
-            vector<vector<complex<double>>> noiseSubspace;
-            for (int i = num_sources; i < num_receivers; ++i) {
-                noiseSubspace.push_back(eigenvectors[i]);
-            }
-
-            // MUSIC spectrum calculation
-            double azimuth = 0.0, elevation = 0.0;
-            double max_spectrum = -1.0;
-
-            for (double theta = -90.0; theta <= 90.0; theta += 1.0) {
-                for (double phi = -90.0; phi <= 90.0; phi += 1.0) {
-                    // Steering vector
-                    vector<complex<double>> steering(num_receivers);
-                    for (int i = 0; i < num_receivers; ++i) {
-                        double phase = 2.0 * RadarConfig::PI * d * i *
-                            (sin(theta * RadarConfig::PI / 180.0) *
-                                cos(phi * RadarConfig::PI / 180.0)) / wavelength;
-                        steering[i] = exp(complex<double>(0, phase));
-                    }
-
-                    // Compute MUSIC spectrum
-                    double spectrum = 0.0;
-                    for (const auto& noiseVec : noiseSubspace) {
-                        double projection = std::abs(std::inner_product(noiseVec.begin(), noiseVec.end(),
-                            steering.begin(), std::complex<double>(0, 0)));
-                        spectrum += 1.0 / (projection * projection);
-                    }
-
-                    if (spectrum > max_spectrum) {
-                        max_spectrum = spectrum;
-                        azimuth = theta;
-                        elevation = phi;
-                    }
-                }
-            }
-
-            // Store the result
-            doaResults.emplace_back(azimuth, elevation);
-        }*/
     }
 }

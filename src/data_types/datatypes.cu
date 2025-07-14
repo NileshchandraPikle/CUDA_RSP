@@ -6,6 +6,27 @@
 #include "../cuda_utils/cuda_utils.hpp"
 
 namespace RadarData {
+EgoEstimationOutput::EgoEstimationOutput() : d_sum(nullptr), d_count(nullptr) {}
+EgoEstimationOutput::~EgoEstimationOutput() { free(); }
+void EgoEstimationOutput::allocate() {
+    cudaMalloc(&d_sum, sizeof(double));
+    cudaMalloc(&d_count, sizeof(int));
+}
+void EgoEstimationOutput::free() {
+    if (d_sum) cudaFree(d_sum);
+    if (d_count) cudaFree(d_count);
+    d_sum = nullptr;
+    d_count = nullptr;
+}
+void EgoEstimationOutput::zero(cudaStream_t stream) {
+    cudaMemsetAsync(d_sum, 0, sizeof(double), stream);
+    cudaMemsetAsync(d_count, 0, sizeof(int), stream);
+}
+void EgoEstimationOutput::copy_to_host(double& h_sum, int& h_count, cudaStream_t stream) const {
+    cudaMemcpyAsync(&h_sum, d_sum, sizeof(double), cudaMemcpyDeviceToHost, stream);
+    cudaMemcpyAsync(&h_count, d_count, sizeof(int), cudaMemcpyDeviceToHost, stream);
+    cudaStreamSynchronize(stream);
+}
 
 Frame::Frame(int r, int c, int s)
     : num_receivers(r), num_chirps(c), num_samples(s), d_data(nullptr)
@@ -463,6 +484,9 @@ void TargetResults::allocate_host(int max_targets) {
     if (!targets) {
         targets = new Target[max_targets];
         memset(targets, 0, max_targets * sizeof(Target));
+        for (int i = 0; i < max_targets; ++i) {
+            targets[i].rcs = 0.0;
+        }
     }
 }
 
@@ -470,6 +494,7 @@ void TargetResults::allocate_device(int max_targets) {
     if (!d_targets) {
         CUDA_CHECK(cudaMalloc(&d_targets, max_targets * sizeof(Target)));
         CUDA_CHECK(cudaMemset(d_targets, 0, max_targets * sizeof(Target)));
+        // Optionally set rcs to 0.0 in device memory (not strictly needed after memset)
     }
 }
 

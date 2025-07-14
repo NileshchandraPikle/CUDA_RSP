@@ -1,3 +1,5 @@
+#include <cuda_runtime.h>
+
 #ifndef DATA_TYPES_H
 #define DATA_TYPES_H
 
@@ -61,6 +63,7 @@ namespace RadarData {
         double elevation;
         double strength;
         double relativeSpeed;
+        double rcs;
     };
 
     class TargetResults {
@@ -173,7 +176,17 @@ namespace RadarData {
     void init_steeringVector();
     void free_steeringVector();
 };// DoAInfo
-    
+   
+  struct EgoEstimationOutput {
+        double* d_sum;
+        int* d_count;
+        EgoEstimationOutput();
+        ~EgoEstimationOutput();
+        void allocate();
+        void free();
+        void zero(cudaStream_t stream = 0);
+        void copy_to_host(double& h_sum, int& h_count, cudaStream_t stream = 0) const;
+    };//EgoEstimationOutput
 }
 
 #endif // DATA_TYPES_H
