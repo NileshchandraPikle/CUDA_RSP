@@ -1,6 +1,8 @@
 #include "target_processing.cuh"
 #include "../config/config.hpp"
 #include <cmath>
+#include <iostream>
+#include <stdexcept>
 
 namespace TargetProcessing {
 /*
@@ -73,6 +75,19 @@ __global__ void detect_targets_kernel(
     d_targets[idx].relativeSpeed = (dopplerShift * wavelength) / 2.0;
 }
 
+/**
+ * GPU implementation of target detection
+ * 
+ * This function detects targets based on peak snapshots and direction of arrival information.
+ * It uses our corrected implementation that matches the sequential version.
+ * 
+ * @param d_peaksnaps Input peak snapshot data on device
+ * @param d_angles Input direction of arrival angles on device
+ * @param num_peaks Number of peaks to process
+ * @param num_receivers Number of receivers
+ * @param targetResults Output structure for detected targets
+ * @throws runtime_error if a CUDA error occurs
+ */
 void detect_targets_gpu(
     cuDoubleComplex* d_peaksnaps,
     RadarData::DoAangles* d_angles,
@@ -80,16 +95,48 @@ void detect_targets_gpu(
     int num_receivers,
     RadarData::TargetResults& targetResults
 ) {
-    int threads = 256;
-    int blocks = (num_peaks + threads - 1) / threads;
-    detect_targets_kernel<<<blocks, threads>>>(
-        d_peaksnaps,
-        d_angles,
-        num_peaks,
-        num_receivers,
-        targetResults.d_targets
-    );
-    cudaDeviceSynchronize();
+    try {
+        // Validate input parameters
+        if (num_peaks <= 0) {
+            std::cerr << "Warning: No peaks to process in target detection" << std::endl;
+            targetResults.num_targets = 0;
+            return;
+        }
+        
+        if (!d_peaksnaps || !d_angles) {
+            throw std::runtime_error("Invalid device pointers provided to target detection");
+        }
+        
+        // Set kernel execution parameters
+        int threads = 256;
+        int blocks = (num_peaks + threads - 1) / threads;
+        
+        // Launch target detection kernel
+        detect_targets_kernel<<<blocks, threads>>>(
+            d_peaksnaps,
+            d_angles,
+            num_peaks,
+            num_receivers,
+            targetResults.d_targets
+        );
+        
+        // Wait for kernel execution to complete
+        cudaDeviceSynchronize();
+        
+        // Check for CUDA errors
+        cudaError_t err = cudaGetLastError();
+        if (err != cudaSuccess) {
+            throw std::runtime_error(std::string("CUDA error in detect_targets_kernel: ") + 
+                                     cudaGetErrorString(err));
+        }
+        
+        // Set number of detected targets
+        targetResults.num_targets = num_peaks;
+    }
+    catch (const std::exception& e) {
+        std::cerr << "Error in detect_targets_gpu: " << e.what() << std::endl;
+        throw;
+    }
 }
 
 } // namespace TargetProcessing

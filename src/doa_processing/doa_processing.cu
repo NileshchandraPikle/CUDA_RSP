@@ -1,12 +1,14 @@
 #include "doa_processing.cuh"
-#include"../data_types/datatypes.cuh"
+#include "../data_types/datatypes.cuh"
 #include "../config/config.hpp"
+#include "../cuda_utils/cuda_utils.hpp"
 #include <cmath>
 #include <iostream>
 #include <vector>
 #include <complex>
 #include <algorithm> // For std::sort
 #include <numeric>   // For std::inner_product
+#include <stdexcept> // For std::runtime_error
 
 namespace DOAProcessing {
     using namespace std;
@@ -183,18 +185,71 @@ __global__ void compute_music_doa_kernel(cuDoubleComplex* d_peaksnaps, int num_p
 
 void compute_music_doa(const RadarData::peakInfo& peakinfo,
         RadarData::DoAInfo& doAInfo, int num_sources) {
-    int num_receivers = doAInfo.num_receivers;
-    dim3 threads(256, 1, 1);
-    dim3 blocks((peakinfo.num_peaks + threads.x - 1) / threads.x, 1, 1);
-    compute_music_doa_kernel<<<blocks, threads>>>(peakinfo.d_peaksnaps, peakinfo.num_peaks, doAInfo.d_R, num_receivers, num_sources,
-        doAInfo.d_eigenvalues,doAInfo.d_eigenvector, doAInfo.d_eigenvectors, doAInfo.d_next_eigenvector, doAInfo.d_noiseSubspace, doAInfo.d_angles);
-    cudaDeviceSynchronize();
-    doAInfo.copy_angles_to_host();
-    /*for(int i = 0; i < peakinfo.num_peaks; ++i) {
-        std::cout << "Peak " << i + 1 << ": Azimuth = " 
-        << doAInfo.angles[i].azimuth << ", Elevation = " 
-        << doAInfo.angles[i].elevation << std::endl;
-    }*/
-
+    try {
+        // Parameter validation
+        if (peakinfo.d_peaksnaps == nullptr) {
+            throw std::runtime_error("Invalid peak snapshots data (null pointer)");
+        }
+        
+        if (peakinfo.num_peaks <= 0) {
+            std::cout << "No peaks to process in DoA estimation" << std::endl;
+            return;
+        }
+        
+        if (num_sources <= 0 || num_sources >= doAInfo.num_receivers) {
+            throw std::runtime_error("Invalid number of sources for MUSIC algorithm: " + 
+                                    std::to_string(num_sources) + 
+                                    " (must be positive and less than number of receivers: " + 
+                                    std::to_string(doAInfo.num_receivers) + ")");
+        }
+        
+        int num_receivers = doAInfo.num_receivers;
+        
+        // Calculate kernel launch parameters
+        const int threads_per_block = 256;
+        dim3 threads(threads_per_block, 1, 1);
+        dim3 blocks((peakinfo.num_peaks + threads.x - 1) / threads.x, 1, 1);
+        
+        std::cout << "DoA Processing: Estimating angles for " << peakinfo.num_peaks 
+                  << " peaks using MUSIC algorithm with " << num_sources << " sources" << std::endl;
+        std::cout << "  Launch parameters: " << blocks.x << " blocks, " 
+                  << threads_per_block << " threads per block" << std::endl;
+        
+        // Launch kernel
+        compute_music_doa_kernel<<<blocks, threads>>>(
+            peakinfo.d_peaksnaps, 
+            peakinfo.num_peaks, 
+            doAInfo.d_R, 
+            num_receivers, 
+            num_sources,
+            doAInfo.d_eigenvalues,
+            doAInfo.d_eigenvector, 
+            doAInfo.d_eigenvectors, 
+            doAInfo.d_next_eigenvector, 
+            doAInfo.d_noiseSubspace, 
+            doAInfo.d_angles);
+        
+        // Wait for kernel to complete
+        CUDA_CHECK(cudaDeviceSynchronize());
+        
+        // Check for any kernel launch errors
+        CUDA_CHECK(cudaGetLastError());
+        
+        // Copy results back to host
+        doAInfo.copy_angles_to_host();
+        
+        // Print DoA results (uncomment for debugging)
+        /*
+        for(int i = 0; i < peakinfo.num_peaks; ++i) {
+            std::cout << "Peak " << i + 1 << ": Azimuth = " 
+                    << doAInfo.angles[i].azimuth << "°, Elevation = " 
+                    << doAInfo.angles[i].elevation << "°" << std::endl;
+        }
+        */
+        
+    } catch (const std::exception& e) {
+        std::cerr << "Error in DoA processing: " << e.what() << std::endl;
+        throw;
+    }
     }
 }
