@@ -143,8 +143,8 @@ int main()
         RadarData::TargetResults filteredResults = GhostRemoval::remove_ghost_targets(targetResults, egoSpeed);
 
         // Output filtered targets
-        std::cout << "Filtered Targets (after ghost removal):" << std::endl;
-        for (int i = 0; i < filteredResults.num_targets; i++) {
+       // std::cout << "Filtered Targets (after ghost removal):" << std::endl;
+        /*for (int i = 0; i < filteredResults.num_targets; i++) {
             const auto& target = filteredResults.targets[i];
             std::cout << "Location: (" << target.x << ", " << target.y << ", " << target.z << ")"
                     << ", Range: " << target.range
@@ -152,11 +152,11 @@ int main()
                     << ", Elevation: " << target.elevation
                 << ", Strength: " << target.strength
                 << ", Relative Speed: " << target.relativeSpeed << std::endl;
-        }
+        }*/
         std::cout << "Number of targets after ghost removal: " << filteredResults.num_targets << std::endl;
         
-        std::cout << "Processing complete. Press any key to exit..." << std::endl;
-        std::cin.get();
+        //std::cout << "Processing complete. Press any key to exit..." << std::endl;
+       // std::cin.get();
     }
 
     return 0; 
