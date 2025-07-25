@@ -1,0 +1,2 @@
+/usr/bin/ar qc librcs.a CMakeFiles/rcs.dir/rcs.cu.o
+/usr/bin/ranlib librcs.a

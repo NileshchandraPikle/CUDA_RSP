@@ -1,0 +1,2 @@
+/usr/bin/ar qc libego.a CMakeFiles/ego.dir/ego_estimation.cu.o
+/usr/bin/ranlib libego.a

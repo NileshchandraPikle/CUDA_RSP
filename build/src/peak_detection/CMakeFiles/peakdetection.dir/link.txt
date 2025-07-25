@@ -1,0 +1,2 @@
+/usr/bin/ar qc libpeakdetection.a CMakeFiles/peakdetection.dir/peak_detection.cu.o CMakeFiles/peakdetection.dir/batch_peak_detection.cu.o
+/usr/bin/ranlib libpeakdetection.a

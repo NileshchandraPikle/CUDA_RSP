@@ -1,0 +1,2 @@
+/usr/bin/ar qc libdoa.a CMakeFiles/doa.dir/doa_processing.cu.o
+/usr/bin/ranlib libdoa.a

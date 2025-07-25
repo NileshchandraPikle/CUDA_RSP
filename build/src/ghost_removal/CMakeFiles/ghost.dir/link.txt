@@ -1,0 +1,2 @@
+/usr/bin/ar qc libghost.a CMakeFiles/ghost.dir/ghost_removal.cu.o
+/usr/bin/ranlib libghost.a

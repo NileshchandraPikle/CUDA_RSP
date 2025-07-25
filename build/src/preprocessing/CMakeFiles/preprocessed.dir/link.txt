@@ -1,0 +1,2 @@
+/usr/bin/ar qc libpreprocessed.a CMakeFiles/preprocessed.dir/fft_processing.cu.o CMakeFiles/preprocessed.dir/batch_fft_processing.cu.o
+/usr/bin/ranlib libpreprocessed.a

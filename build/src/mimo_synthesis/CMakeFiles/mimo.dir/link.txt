@@ -1,0 +1,2 @@
+/usr/bin/ar qc libmimo.a CMakeFiles/mimo.dir/mimo_synthesis.cu.o
+/usr/bin/ranlib libmimo.a
