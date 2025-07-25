@@ -29,26 +29,6 @@ namespace DOAProcessing {
                            int num_sources);
 
     /**
-     * @brief Helper function to compute the Hermitian (conjugate transpose) of a matrix
-     *
-     * @param matrix Input matrix
-     * @return Conjugate transpose of the input matrix
-     */
-    std::vector<std::vector<std::complex<double>>> hermitian(
-        const std::vector<std::vector<std::complex<double>>>& matrix);
-
-    /**
-     * @brief Helper function to multiply two matrices
-     *
-     * @param A First input matrix
-     * @param B Second input matrix
-     * @return Result of matrix multiplication A*B
-     */
-    std::vector<std::vector<std::complex<double>>> multiply(
-        const std::vector<std::vector<std::complex<double>>>& A,
-        const std::vector<std::vector<std::complex<double>>>& B);
-
-    /**
      * @brief Device function to compute covariance matrix
      *
      * @param snap Input signal snapshot

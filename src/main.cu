@@ -3,16 +3,13 @@
 #include <chrono>
 #include <stdexcept>
 #include <iomanip>
-
-// Configuration includes
+#include <vector>
 #include "config/config.hpp"
-
-// Data types and utilities
 #include "data_types/datatypes.cuh"
-
-// Processing steps includes
 #include "preprocessing/fft_processing.cuh"
+#include "preprocessing/batch_fft_processing.cuh"
 #include "peak_detection/peak_detection.cuh"
+#include "peak_detection/batch_peak_detection.cuh"
 #include "mimo_synthesis/mimo_synthesis.cuh"
 #include "doa_processing/doa_processing.cuh"
 #include "target_processing/target_processing.cuh"
@@ -21,7 +18,7 @@
 #include "ghost_removal/ghost_removal.cuh"
 
 /**
- * CUDA Radar Signal Processing Pipeline
+ * CUDA Radar Signal Processing Pipeline - Single Frame Processing
  * 
  * This implementation processes radar data using CUDA to parallelize computation.
  * The pipeline includes:
@@ -33,6 +30,8 @@
  * 6. RCS estimation
  * 7. Ego motion estimation
  * 8. Ghost target removal
+ * 
+ * This version implements single frame processing for all stages.
  */
 
 
@@ -46,6 +45,8 @@ void printTimingInfo(const std::string& stepName, const std::chrono::duration<do
 
 /**
  * Main function implementing the radar signal processing pipeline
+ * 
+ * This version implements single frame processing for all stages.
  */
 int main() 
 {
@@ -59,282 +60,191 @@ int main()
         RadarData::Frame frame(rconfig.num_receivers, rconfig.num_chirps, rconfig.num_samples);
         RadarData::peakInfo peakinfo(rconfig.num_receivers, rconfig.num_chirps, rconfig.num_samples);
 
-     // Number of frames to process
-    constexpr int NUM_FRAMES = 2;
-    for (int frameIndex = 0; frameIndex < NUM_FRAMES; ++frameIndex) {
-        std::cout << "Processing frame " << frameIndex + 1 << " of " << NUM_FRAMES << std::endl;
-
-        // Initialize frame by reading data for the current frame
+        // Initialize maximum-capacity structures once outside the loop
+        const int MAX_EXPECTED_PEAKS = peakinfo.max_num_peaks;
+        
+        // Pre-allocate DoA structure with maximum capacity
+        RadarData::DoAInfo doaInfo(MAX_EXPECTED_PEAKS, rconfig.num_receivers);
+        doaInfo.initialize();
+        
+        // Pre-allocate target results with maximum capacity
+        RadarData::TargetResults targetResults(MAX_EXPECTED_PEAKS);
+        
+        // Pre-allocate filtered results (for ghost removal) with maximum capacity
+        RadarData::TargetResults filteredResults(MAX_EXPECTED_PEAKS);
+        filteredResults.free_device(); // Only need host memory for filtering
+        
+        // Number of frames to process in total
+        constexpr int TOTAL_FRAMES = 20;
+        
+        // Single frame processing code
+        std::cout << "\n=== Using SINGLE FRAME PROCESSING mode ===\n" << std::endl;
+        
+        // Initialize the single frame
         RadarData::initialize_frame(
             frame,
             rconfig.num_receivers,
             rconfig.num_chirps,
             rconfig.num_samples,
-            frameIndex
+            0 // First frame
         );
-
-        //std::cout << "Data Initialized" << std::endl;
-        // Calculate frame size in bytes
-        size_t frame_size = RadarData::frame_size_bytes(frame);
-        //std::cout << "Frame size in bytes: " << frame_size << std::endl;
         frame.copy_frame_to_device();
-      
-       
+        
+        // Calculate frame size in bytes for a single frame
+        size_t frame_size = RadarData::frame_size_bytes(frame);
+        std::cout << "Frame size: " << frame_size << " bytes" << std::endl;
+        
         //*********************STEP 1 FFT PROCESSING *******************
-        std::cout << "\nExecuting FFT Processing..." << std::endl;
+        std::cout << "\nExecuting Single Frame FFT Processing..." << std::endl;
         auto start = std::chrono::high_resolution_clock::now();
         
-        // Execute FFT pipeline (includes Hilbert transform, FFT1, FFT2)
-        fftProcessing::fftProcessPipeline(frame);
+        // Process TOTAL_FRAMES frames sequentially to measure performance
+        for (int i = 0; i < TOTAL_FRAMES; i++) {
+            fftProcessing::fftProcessPipeline(frame);
+        }
         
         auto end = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> elapsed = end - start;
-        printTimingInfo("FFT Processing", elapsed);
+        printTimingInfo("Sequential FFT Processing (" + std::to_string(TOTAL_FRAMES) + " frames)", elapsed);
+        double seq_avg = elapsed.count() / TOTAL_FRAMES;
+        std::cout << "Average per frame: " << seq_avg << " seconds" << std::endl;
+        
+        // Print summary of the FFT processing
+        std::cout << "\n======= FFT Processing Summary =======" << std::endl;
+        std::cout << "Processing mode: SINGLE FRAME (sequential)" << std::endl;
+        std::cout << "Frames processed: " << TOTAL_FRAMES << std::endl;
+        std::cout << "Average time per frame: " << seq_avg << " seconds" << std::endl;
+        std::cout << "Memory usage: " << frame_size / 1024 << " KB per frame" << std::endl;
+        std::cout << "=========================================" << std::endl;
         
         // Copy results back to host for validation if needed
         frame.copy_frame_to_host();
-    
-    //*********************STEP 2 PEAK DETECTION  *******************
-        std::cout << "\nExecuting Peak Detection using CFAR..." << std::endl;
         
+        //*********************STEP 2 PEAK DETECTION *******************
+        // Single frame peak detection
+        std::cout << "\nExecuting Sequential Peak Detection..." << std::endl;
+        
+        // Execute sequential peak detection
         start = std::chrono::high_resolution_clock::now();
-        // Perform CFAR peak detection on GPU
-        PeakDetection::cfar_peak_detection(frame, peakinfo);
+        
+        for (int i = 0; i < TOTAL_FRAMES; ++i) {
+            PeakDetection::cfar_peak_detection(frame, peakinfo);
+        }
+        
         end = std::chrono::high_resolution_clock::now();
         elapsed = end - start;
+        printTimingInfo("Sequential Peak Detection (" + std::to_string(TOTAL_FRAMES) + " frames)", elapsed);
+        double seq_peak_avg = elapsed.count() / TOTAL_FRAMES;
+        std::cout << "Average per frame: " << seq_peak_avg << " seconds" << std::endl;
         
-        // Copy results back to host for validation
+        // Report peaks for the last frame
         peakinfo.copy_peakInfo_to_host();
+        int total_peaks = peakinfo.num_peaks;
+        double avg_peaks_per_frame = static_cast<double>(total_peaks); // Only one frame
         
-        printTimingInfo("Peak Detection", elapsed);
-        std::cout << "Number of peaks detected: " << peakinfo.num_peaks << std::endl;
+        // Peak detection summary
+        std::cout << "\n======= Peak Detection Summary =======" << std::endl;
+        std::cout << "Processing mode: SINGLE FRAME (sequential)" << std::endl;
+        std::cout << "Frames processed: " << TOTAL_FRAMES << std::endl;
+        std::cout << "Average time per frame: " << seq_peak_avg << " seconds" << std::endl;
+        std::cout << "Total peaks detected: " << total_peaks << std::endl;
+        std::cout << "Average peaks per frame: " << avg_peaks_per_frame << std::endl;
+        std::cout << "=========================================" << std::endl;
         
-        // Validate peak count is reasonable
-        if (peakinfo.num_peaks == 0) {
-            std::cerr << "Warning: No peaks detected. Check CFAR parameters." << std::endl;
-        } else if (peakinfo.num_peaks >= peakinfo.max_num_peaks) {
-            std::cerr << "Warning: Maximum peak limit reached. Some peaks may be truncated." << std::endl;
-        }
-        // Output detected peaks
-        /*for (int i = 0; i < peakinfo.num_peaks; ++i) {
-            const RadarData::Peak& peak = peakinfo.peakList[i];
-            std::cout << "Peak " << i + 1 << ": Receiver " << peak.receiver
-                      << ", Chirp " << peak.chirp
-                      << ", Sample " << peak.sample
-                      << ", Value " << peak.value << std::endl;
-        }*/
-    
-        //*********************STEP 3 MIMO SYNTHESIS PEAK SNAP DETECTION  *******************
-        std::cout << "\nExecuting MIMO Synthesis..." << std::endl;
+        //*********************STEP 3 MIMO SYNTHESIS *******************
+        std::cout << "\n*** MIMO Synthesis stage (commented out) ***" << std::endl;
+        // std::cout << "\nExecuting MIMO Synthesis..." << std::endl;
+        // start = std::chrono::high_resolution_clock::now();
         
-        start = std::chrono::high_resolution_clock::now();
-        // Create peak snapshots from detected peaks
-        MIMOSynthesis::synthesize_peaks(frame, peakinfo);
-        end = std::chrono::high_resolution_clock::now();
-        elapsed = end - start;
+        // Call MIMO synthesis pipeline
+        // MIMOSynthesis::mimoSynthesisPipeline(frame);
         
-        // Copy results back to host for validation
-        peakinfo.copyPeakSnapsToHost();
+        // end = std::chrono::high_resolution_clock::now();
+        // elapsed = end - start;
+        // printTimingInfo("MIMO Synthesis", elapsed);
         
-        printTimingInfo("MIMO Synthesis", elapsed);
+        //*********************STEP 4 DIRECTION OF ARRIVAL PROCESSING *******************
+        std::cout << "\n*** Direction of Arrival Processing stage (commented out) ***" << std::endl;
+        // std::cout << "\nExecuting Direction of Arrival Processing..." << std::endl;
+        // start = std::chrono::high_resolution_clock::now();
         
-        // Validate peak snaps (uncomment for debugging)
-        /*
-        for (int i = 0; i < std::min(peakinfo.num_peaks, 5); ++i) {  // Show first 5 peaks
-            std::cout << "Peak Snap " << i + 1 << " sample values: ";
-            for (int r = 0; r < std::min(rconfig.num_receivers, 3); ++r) {  // Show first 3 receivers
-                std::complex<double> val = peakinfo.peaksnaps[i * rconfig.num_receivers + r];
-                std::cout << "(" << val.real() << ", " << val.imag() << ") ";
-            }
-            if (rconfig.num_receivers > 3) std::cout << "...";  // Indicate truncation
-            std::cout << std::endl;
-        }
-        if (peakinfo.num_peaks > 5) std::cout << "... (remaining peaks truncated)" << std::endl;
-        */
-    
-    
-     
-        //*********************STEP 4 DOA PROCESSING  *******************
-        std::cout << "\nExecuting Direction of Arrival (DoA) Processing..." << std::endl;
+        // Call DoA processing pipeline
+        // DoAProcessing::doaProcessingPipeline(peakinfo, doaInfo);
         
-        // Initialize DoA data structures
-        RadarData::DoAInfo doaInfo(peakinfo.num_peaks, rconfig.num_receivers);
-        doaInfo.initialize();
-
-        // Process DoA using MUSIC algorithm
-        start = std::chrono::high_resolution_clock::now();
+        // end = std::chrono::high_resolution_clock::now();
+        // elapsed = end - start;
+        // printTimingInfo("Direction of Arrival Processing", elapsed);
         
-        // Number of signal sources = 1 (assumes one target per peak)
-        const int numSources = 1;
-        DOAProcessing::compute_music_doa(peakinfo, doaInfo, numSources);
+        //*********************STEP 5 TARGET PROCESSING *******************
+        std::cout << "\n*** Target Detection Processing stage (commented out) ***" << std::endl;
+        // std::cout << "\nExecuting Target Processing..." << std::endl;
+        // start = std::chrono::high_resolution_clock::now();
         
-        end = std::chrono::high_resolution_clock::now();
-        elapsed = end - start;
+        // Call target processing pipeline
+        // TargetProcessing::targetProcessingPipeline(peakinfo, doaInfo, targetResults);
         
-        printTimingInfo("DoA Processing", elapsed);
+        // end = std::chrono::high_resolution_clock::now();
+        // elapsed = end - start;
+        // printTimingInfo("Target Processing", elapsed);
         
-        // Display DoA results (uncomment for debugging)
-        /*
-        std::cout << "DoA Results (Azimuth, Elevation):" << std::endl;
-        for (int i = 0; i < std::min(peakinfo.num_peaks, 10); ++i) {
-            std::cout << "Peak " << i + 1 << ": Azimuth = " << doaInfo.angles[i].azimuth 
-                      << ", Elevation = " << doaInfo.angles[i].elevation << std::endl;
-        }
-        if (peakinfo.num_peaks > 10) std::cout << "... (remaining DoA results truncated)" << std::endl;
-        */
-        //*********************STEP 5 TARGET DETECTION (GPU) *******************
-        std::cout << "\nExecuting Target Detection..." << std::endl;
+        //*********************STEP 6 RCS ESTIMATION *******************
+        std::cout << "\n*** RCS Estimation stage (commented out) ***" << std::endl;
+        // std::cout << "\nExecuting RCS Estimation..." << std::endl;
+        // start = std::chrono::high_resolution_clock::now();
         
-        // Initialize target results storage
-        RadarData::TargetResults targetResults(peakinfo.num_peaks);
+        // Call RCS estimation pipeline
+        // RCS::rcsEstimationPipeline(frame, targetResults);
         
-        // Perform target detection on GPU
-        start = std::chrono::high_resolution_clock::now();
-        TargetProcessing::detect_targets_gpu(
-            peakinfo.d_peaksnaps,
-            doaInfo.d_angles,
-            peakinfo.num_peaks,
-            rconfig.num_receivers,
-            targetResults
-        );
-        end = std::chrono::high_resolution_clock::now();
-        elapsed = end - start;
+        // end = std::chrono::high_resolution_clock::now();
+        // elapsed = end - start;
+        // printTimingInfo("RCS Estimation", elapsed);
         
-        // Copy results back to host
-        targetResults.copy_to_host();
+        //*********************STEP 7 EGO MOTION ESTIMATION *******************
+        std::cout << "\n*** Ego Motion Estimation stage (commented out) ***" << std::endl;
+        // std::cout << "\nExecuting Ego Motion Estimation..." << std::endl;
+        // start = std::chrono::high_resolution_clock::now();
         
-        printTimingInfo("Target Detection", elapsed);
+        // Call ego motion estimation pipeline
+        // EgoEstimation::egoEstimationPipeline(targetResults);
         
-        // Display target information (uncomment for debugging)
-        /*
-        std::cout << "Targets Detected:" << std::endl;
-        for (int i = 0; i < std::min(targetResults.num_targets, 10); ++i) {
-            const auto& target = targetResults.targets[i];
-            std::cout << "Target " << i + 1 << ": Position (" 
-                      << target.x << ", " << target.y << ", " << target.z
-                      << "), Range: " << target.range 
-                      << ", Speed: " << target.relativeSpeed << std::endl;
-        }
-        if (targetResults.num_targets > 10) std::cout << "... (remaining targets truncated)" << std::endl;
-        */
-
-        //*********************STEP 6 RCS ESTIMATION (GPU) *******************
-        std::cout << "\nExecuting Radar Cross Section (RCS) Estimation..." << std::endl;
+        // end = std::chrono::high_resolution_clock::now();
+        // elapsed = end - start;
+        // printTimingInfo("Ego Motion Estimation", elapsed);
         
-        // Set radar parameters for RCS estimation
-        const double transmittedPower = 1.0; // Transmitted power in Watts
-        const double transmitterGain = 10.0; // Transmitter gain in dB
-        const double receiverGain = 10.0;    // Receiver gain in dB
+        //*********************STEP 8 GHOST REMOVAL *******************
+        std::cout << "\n*** Ghost Removal stage (commented out) ***" << std::endl;
+        // std::cout << "\nExecuting Ghost Target Removal..." << std::endl;
+        // start = std::chrono::high_resolution_clock::now();
         
-        // Perform RCS estimation on GPU
-        start = std::chrono::high_resolution_clock::now();
-        RCSEstimation::estimate_rcs_gpu(
-            targetResults,
-            transmittedPower,
-            transmitterGain,
-            receiverGain,
-            RadarConfig::WAVELENGTH
-        );
-        end = std::chrono::high_resolution_clock::now();
-        elapsed = end - start;
+        // Call ghost removal pipeline
+        // GhostRemoval::ghostRemovalPipeline(targetResults, filteredResults);
         
-        // Copy results back to host
-        targetResults.copy_to_host();
+        // end = std::chrono::high_resolution_clock::now();
+        // elapsed = end - start;
+        // printTimingInfo("Ghost Target Removal", elapsed);
         
-        printTimingInfo("RCS Estimation", elapsed);
-        std::cout << "Targets detected: " << targetResults.num_targets << std::endl;
+        // Calculate and print overall processing time
+        double total_processing_time = 0.0;
         
-        // Display RCS results (uncomment for debugging)
-        /*
-        std::cout << "RCS Estimation Results:" << std::endl;
-        for (int i = 0; i < std::min(targetResults.num_targets, 10); ++i) {
-            const auto& target = targetResults.targets[i];
-            std::cout << "Target " << i + 1 << ": RCS = " << target.rcs << " m²" << std::endl;
-        }
-        if (targetResults.num_targets > 10) std::cout << "... (remaining RCS results truncated)" << std::endl;
-        */
-       
-        /*********************STEP 7 EGO ESTIMATION (GPU) *******************/
-        std::cout << "\nExecuting Ego Motion Estimation..." << std::endl;
+        // Add up the times for all implemented sequential processing stages
+        total_processing_time += seq_avg * TOTAL_FRAMES;        // FFT processing time
+        total_processing_time += seq_peak_avg * TOTAL_FRAMES;   // Peak detection time
         
-        // Estimate ego vehicle speed using GPU
-        start = std::chrono::high_resolution_clock::now();
-        double egoSpeed = EgoMotion::estimate_ego_motion_gpu(targetResults.d_targets, targetResults.num_targets);
-        end = std::chrono::high_resolution_clock::now();
-        elapsed = end - start;
+        // Print summary with standardized format
+        std::cout << "\n======= Overall Processing Summary =======" << std::endl;
+        std::cout << "Processing mode: SINGLE FRAME" << std::endl;
+        std::cout << "Total processing time for " << TOTAL_FRAMES << " frames: " << std::fixed << std::setprecision(6) << total_processing_time << " seconds" << std::endl;
+        std::cout << "Average time per frame: " << total_processing_time / TOTAL_FRAMES << " seconds" << std::endl;
+        std::cout << "Frames per second: " << TOTAL_FRAMES / total_processing_time << std::endl;
+        std::cout << "=============================================" << std::endl;
         
-        printTimingInfo("Ego Motion Estimation", elapsed);
-        std::cout << "Estimated Ego Vehicle Speed: " << std::fixed << std::setprecision(2) 
-                  << egoSpeed << " m/s" << std::endl;
+        std::cout << "\nAll pipeline stages executed successfully." << std::endl;
         
-        //*********************STEP 8 GHOST TARGET REMOVAL *******************/
-        std::cout << "\nExecuting Ghost Target Removal..." << std::endl;
+        // Clean up all radar resources using the centralized function
+        RadarData::cleanupRadarResources(frame, peakinfo, doaInfo, targetResults);
         
-        // Create a pointer to store filtered results - helps avoid double-free issues
-        RadarData::TargetResults* pFilteredResults = nullptr;
+        std::cout << "\nProcessing pipeline complete." << std::endl;
         
-        start = std::chrono::high_resolution_clock::now();
-        
-        // Create filtered results on the heap
-        pFilteredResults = new RadarData::TargetResults(targetResults.num_targets);
-        
-        // Only use host memory since we'll just be reading, not doing CUDA operations
-        pFilteredResults->free_device();
-        pFilteredResults->num_targets = 0;
-        
-        // Manually filter targets
-        int removed = 0;
-        constexpr double RELATIVE_SPEED_THRESHOLD = 5.0; // Match the threshold in ghost_removal.cu
-        
-        std::cout << "Ghost removal: Processing " << targetResults.num_targets << " targets" << std::endl;
-        
-        for (int i = 0; i < targetResults.num_targets; i++) {
-            const auto& target = targetResults.targets[i];
-            double relativeSpeedDifference = std::abs(target.relativeSpeed - egoSpeed);
-            
-            // Filter out ghost targets
-            if (relativeSpeedDifference > RELATIVE_SPEED_THRESHOLD) {
-                removed++;
-                continue;
-            }
-            
-            // Keep valid targets
-            pFilteredResults->targets[pFilteredResults->num_targets++] = target;
-        }
-        
-        end = std::chrono::high_resolution_clock::now();
-        elapsed = end - start;
-        
-        printTimingInfo("Ghost Target Removal", elapsed);
-        std::cout << "Ghost removal: Removed " << removed << " targets, kept " 
-                  << pFilteredResults->num_targets << " targets" << std::endl;
-                  
-        std::cout << "Initial targets: " << targetResults.num_targets << std::endl;
-        std::cout << "Targets after ghost removal: " << pFilteredResults->num_targets << std::endl;
-        std::cout << "Ghost targets removed: " << (targetResults.num_targets - pFilteredResults->num_targets) << std::endl;
-        
-        // Display filtered target results (uncomment for debugging)
-        /*
-        std::cout << "\nFiltered Targets (after ghost removal):" << std::endl;
-        for (int i = 0; i < std::min(filteredResults.num_targets, 10); i++) {
-            const auto& target = filteredResults.targets[i];
-            std::cout << "Target " << i + 1 << ": Location (" 
-                      << target.x << ", " << target.y << ", " << target.z << ")"
-                      << ", Range: " << target.range
-                      << ", Speed: " << target.relativeSpeed << std::endl;
-        }
-        if (filteredResults.num_targets > 10) std::cout << "... (remaining targets truncated)" << std::endl;
-        */
-        
-        std::cout << "\nRadar processing pipeline complete." << std::endl;
-        
-        // Clean up filtered results memory
-        if (pFilteredResults) {
-            delete pFilteredResults;
-            pFilteredResults = nullptr;
-        }
-    } // End frame processing loop
-    
         return 0;
     }
     catch (const std::exception& e) {

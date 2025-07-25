@@ -118,6 +118,67 @@ size_t frame_size_bytes(const Frame& frame) {
            frame.num_samples *
            sizeof(Complex);
 }
+
+// Initialize multiple frames for batch processing
+size_t initializeBatchFrames(
+    std::vector<Frame>& frames, 
+    int numFrames,
+    int num_receivers,
+    int num_chirps, 
+    int num_samples
+) {
+    // Clear the vector in case it has existing frames
+    frames.clear();
+    frames.reserve(numFrames);
+    
+    std::cout << "Initializing " << numFrames << " frames for batch processing..." << std::endl;
+    
+    // Calculate memory requirements
+    size_t mem_per_frame = sizeof(std::complex<double>) * num_receivers * num_chirps * num_samples;
+    size_t total_mem = mem_per_frame * numFrames;
+    std::cout << "Memory per frame: " << mem_per_frame / (1024*1024) << " MB" << std::endl;
+    std::cout << "Total memory for batch: " << total_mem / (1024*1024) << " MB" << std::endl;
+    
+    // Check if we have enough GPU memory
+    size_t free_mem = 0, total_mem_gpu = 0;
+    cudaMemGetInfo(&free_mem, &total_mem_gpu);
+    std::cout << "GPU memory: " << total_mem_gpu / (1024*1024) << " MB total, " 
+              << free_mem / (1024*1024) << " MB free" << std::endl;
+    
+    try {
+        for (int i = 0; i < numFrames; ++i) {
+            std::cout << "Initializing frame " << i+1 << "/" << numFrames << "..." << std::endl;
+            
+            // Create a new frame
+            frames.emplace_back(num_receivers, num_chirps, num_samples);
+            
+            // Initialize frame with data
+            initialize_frame(
+                frames.back(),
+                num_receivers,
+                num_chirps,
+                num_samples,
+                i % numFrames // Cycle through available frame indices
+            );
+            
+            std::cout << "Copying frame " << i+1 << " to device..." << std::endl;
+            // Copy to device
+            frames.back().copy_frame_to_device();
+            std::cout << "Frame " << i+1 << " initialized and copied to device." << std::endl;
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "Exception during frame initialization: " << e.what() << std::endl;
+        throw;
+    }
+    
+    // Calculate and return frame size in bytes for a single frame
+    size_t frame_size = frame_size_bytes(frames[0]);
+    std::cout << "Single frame size: " << frame_size << " bytes" << std::endl;
+    std::cout << "Total batch size: " << (frame_size * numFrames) / (1024*1024) << " MB" << std::endl;
+    
+    return frame_size * numFrames;
+}
+
 peakInfo::peakInfo(int r, int c, int s)
 {
     num_receivers = r;
@@ -516,6 +577,65 @@ void TargetResults::copy_to_host() {
     if (d_targets && targets) {
         CUDA_CHECK(cudaMemcpy(targets, d_targets, num_targets * sizeof(Target), cudaMemcpyDeviceToHost));
     }
+}
+
+/**
+ * Free all GPU memory resources associated with radar data structures
+ * 
+ * This function centralizes all memory cleanup operations for radar data structures
+ * to ensure consistent and complete memory management.
+ * 
+ * @param frame Pointer to radar frame structure to cleanup (nullptr to skip)
+ * @param peakinfo Pointer to peak detection information structure to cleanup (nullptr to skip)
+ * @param doaInfo Pointer to direction of arrival information structure to cleanup (nullptr to skip)
+ * @param targetResults Pointer to target processing results structure to cleanup (nullptr to skip)
+ * @param cleanupFrame Whether to clean up frame resources (default: true)
+ * @param cleanupPeakInfo Whether to clean up peak info resources (default: true)
+ */
+void cleanupRadarResources(
+    Frame* frame,
+    peakInfo* peakinfo,
+    DoAInfo* doaInfo,
+    TargetResults* targetResults,
+    bool cleanupFrame,
+    bool cleanupPeakInfo
+) {
+    // Clean up frame resources if provided and flag is set
+    if (frame && cleanupFrame) {
+        frame->free_device();
+    }
+    
+    // Clean up peak detection resources if provided and flag is set
+    if (peakinfo && cleanupPeakInfo) {
+        peakinfo->free_peakInfo_device();
+    }
+    
+    // Clean up DoA processing resources if provided
+    if (doaInfo) {
+        doaInfo->free_angles_device();
+        doaInfo->free_R_device();
+        doaInfo->free_eigenData();
+        doaInfo->free_noiseSubspace();
+        doaInfo->free_steeringVector();
+    }
+    
+    // Clean up target processing resources if provided
+    if (targetResults) {
+        targetResults->free_device();
+    }
+    
+    // Output memory cleanup confirmation
+    std::cout << "Radar processing resources cleaned up successfully" << std::endl;
+}
+
+// Overload for reference parameters (for backward compatibility)
+void cleanupRadarResources(
+    Frame& frame,
+    peakInfo& peakinfo,
+    DoAInfo& doaInfo,
+    TargetResults& targetResults
+) {
+    cleanupRadarResources(&frame, &peakinfo, &doaInfo, &targetResults, true, true);
 }
 
 } // namespace RadarData

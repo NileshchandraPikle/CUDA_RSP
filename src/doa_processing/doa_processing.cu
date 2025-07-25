@@ -12,51 +12,6 @@
 
 namespace DOAProcessing {
     using namespace std;
-
-    // Helper function to compute the Hermitian (conjugate transpose) of a matrix
-    vector<vector<complex<double>>> hermitian(const vector<vector<complex<double>>>& matrix) {
-        size_t rows = matrix.size();
-        size_t cols = matrix[0].size();
-        vector<vector<complex<double>>> result(cols, vector<complex<double>>(rows));
-
-        for (size_t i = 0; i < rows; ++i) {
-            for (size_t j = 0; j < cols; ++j) {
-                result[j][i] = conj(matrix[i][j]);
-            }
-        }
-        return result;
-    }
-
-    // Helper function to multiply two matrices
-    vector<vector<complex<double>>> multiply(const vector<vector<complex<double>>>& A,
-        const vector<vector<complex<double>>>& B) {
-        size_t rows = A.size();
-        size_t cols = B[0].size();
-        size_t inner = B.size();
-        vector<vector<complex<double>>> result(rows, vector<complex<double>>(cols, { 0.0, 0.0 }));
-
-        for (size_t i = 0; i < rows; ++i) {
-            for (size_t j = 0; j < cols; ++j) {
-                for (size_t k = 0; k < inner; ++k) {
-                    result[i][j] += A[i][k] * B[k][j];
-                }
-            }
-        }
-        return result;
-    }
-
-    // Helper function to compute the covariance matrix
-  /*  vector<vector<complex<double>>> compute_covariance(const vector<complex<double>>& snap) {
-        size_t num_receivers = snap.size();
-        vector<vector<complex<double>>> R(num_receivers, vector<complex<double>>(num_receivers, { 0.0, 0.0 }));
-
-        for (size_t i = 0; i < num_receivers; ++i) {
-            for (size_t j = 0; j < num_receivers; ++j) {
-                R[i][j] = snap[i] * conj(snap[j]);
-            }
-        }
-        return R;
-    }*/
     __device__ void compute_covariance(cuDoubleComplex *snap, int num_receivers, cuDoubleComplex *d_R, int peak_index)
     {       
         for (size_t i = 0; i < num_receivers; ++i) {

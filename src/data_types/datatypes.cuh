@@ -49,6 +49,15 @@ namespace RadarData {
     // Function to calculate frame size in bytes
     size_t frame_size_bytes(const Frame& frame);
     
+    // Function to initialize multiple frames for batch processing
+    size_t initializeBatchFrames(
+        std::vector<Frame>& frames, 
+        int numFrames,
+        int num_receivers,
+        int num_chirps, 
+        int num_samples
+    );
+    
     struct Peak {
         int receiver;
         int chirp;
@@ -187,6 +196,36 @@ namespace RadarData {
         void zero(cudaStream_t stream = 0);
         void copy_to_host(double& h_sum, int& h_count, cudaStream_t stream = 0) const;
     };//EgoEstimationOutput
+
+    /**
+     * Free all GPU memory resources associated with radar data structures
+     * 
+     * This function centralizes all memory cleanup operations for radar data structures
+     * to ensure consistent and complete memory management.
+     * 
+     * @param frame Pointer to radar frame structure to cleanup (nullptr to skip)
+     * @param peakinfo Pointer to peak detection information structure to cleanup (nullptr to skip)
+     * @param doaInfo Pointer to direction of arrival information structure to cleanup (nullptr to skip)
+     * @param targetResults Pointer to target processing results structure to cleanup (nullptr to skip)
+     * @param cleanupFrame Whether to clean up frame resources (default: true)
+     * @param cleanupPeakInfo Whether to clean up peak info resources (default: true)
+     */
+    void cleanupRadarResources(
+        Frame* frame,
+        peakInfo* peakinfo,
+        DoAInfo* doaInfo,
+        TargetResults* targetResults,
+        bool cleanupFrame = true,
+        bool cleanupPeakInfo = true
+    );
+    
+    // Overload for reference parameters (for backward compatibility)
+    void cleanupRadarResources(
+        Frame& frame,
+        peakInfo& peakinfo,
+        DoAInfo& doaInfo,
+        TargetResults& targetResults
+    );
 }
 
 #endif // DATA_TYPES_H
