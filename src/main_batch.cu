@@ -57,8 +57,7 @@ int main()
         
         // Initialize batch processing parameters
         constexpr int BATCH_SIZE = 20;  // Number of frames to process in parallel
-        constexpr int TOTAL_FRAMES = 5; // Number of frames to process sequentially for comparison
-        
+                
         // Initialize frame and peak info data structures for a single frame
         // (used only for reference and comparison)
         RadarData::Frame frame(rconfig.num_receivers, rconfig.num_chirps, rconfig.num_samples);
@@ -113,30 +112,9 @@ int main()
         double batch_avg = elapsed.count() / BATCH_SIZE;
         std::cout << "Average per frame: " << batch_avg << " seconds" << std::endl;
         
-        // For comparison purposes, run a few frames in sequential mode
-        std::cout << "\nComparing with sequential frame processing..." << std::endl;
-        start = std::chrono::high_resolution_clock::now();
-        
-        // Process each frame individually to compare performance
-        for (int i = 0; i < 5; ++i) { // Process just 5 frames for comparison
-            fftProcessing::fftProcessPipeline(frames[i]);
-        }
-        
-        end = std::chrono::high_resolution_clock::now();
-        elapsed = end - start;
-        printTimingInfo("Sequential FFT Processing (5 frames)", elapsed);
-        double seq_avg = elapsed.count() / 5.0;
-        std::cout << "Average per frame: " << seq_avg << " seconds" << std::endl;
-        
-        // Calculate speedup
-        double speedup = seq_avg / batch_avg;
-        std::cout << "Speedup factor: " << speedup << "x" << std::endl;
-        
         // Print summary of the FFT processing with standardized format
         int frames_processed = BATCH_SIZE;
         double processing_time = batch_avg;
-        double comparison_time = seq_avg;
-        double fft_speedup = seq_avg / batch_avg;
 
         std::cout << "\n======= FFT Processing Summary =======" << std::endl;
         std::cout << "Processing mode: BATCH (parallel)" << std::endl;
@@ -144,8 +122,6 @@ int main()
         std::cout << "Average time per frame: " << processing_time << " seconds" << std::endl;
         
         // Additional batch-specific metrics
-        std::cout << "Comparison with sequential: " << comparison_time << " seconds per frame" << std::endl;
-        std::cout << "Speedup factor: " << fft_speedup << "x" << std::endl;
         std::cout << "Thread utilization: " << total_threads_fft2 << " concurrent threads during FFT2 phase" << std::endl;
         std::cout << "Memory usage: " << (frame_size * frames_processed) / (1024*1024) << " MB for " << frames_processed << " frames" << std::endl;
         std::cout << "=========================================" << std::endl;
@@ -193,24 +169,6 @@ int main()
         double batch_peak_avg = elapsed.count() / frames_processed;
         std::cout << "Average per frame: " << batch_peak_avg << " seconds" << std::endl;
         
-        // Compare with single frame processing for benchmarking
-        std::cout << "\nComparing with sequential peak detection..." << std::endl;
-        RadarData::peakInfo singlePeakInfo(rconfig.num_receivers, rconfig.num_chirps, rconfig.num_samples);
-        
-        start = std::chrono::high_resolution_clock::now();
-        for (int i = 0; i < 5; ++i) { // Process just 5 frames for comparison
-            PeakDetection::cfar_peak_detection(frames[i], singlePeakInfo);
-        }
-        end = std::chrono::high_resolution_clock::now();
-        elapsed = end - start;
-        printTimingInfo("Sequential Peak Detection (5 frames)", elapsed);
-        double seq_peak_avg = elapsed.count() / 5.0;
-        std::cout << "Average per frame: " << seq_peak_avg << " seconds" << std::endl;
-        
-        // Calculate speedup for peak detection
-        double peak_speedup = seq_peak_avg / batch_peak_avg;
-        std::cout << "Speedup factor: " << peak_speedup << "x" << std::endl;
-        
         // Print summary of peak detection with standardized format
         // Calculate total peaks detected in batch mode
         int total_peaks = 0;
@@ -223,10 +181,6 @@ int main()
         std::cout << "Processing mode: BATCH (parallel)" << std::endl;
         std::cout << "Frames processed: " << frames_processed << std::endl;
         std::cout << "Average time per frame: " << batch_peak_avg << " seconds" << std::endl;
-            
-        // Additional comparison metrics for batch mode
-        std::cout << "Comparison with sequential: " << seq_peak_avg << " seconds per frame" << std::endl;
-        std::cout << "Speedup factor: " << peak_speedup << "x" << std::endl;
 
         // Peak information
         std::cout << "Total peaks detected: " << total_peaks << std::endl;
@@ -253,28 +207,15 @@ int main()
         std::cout << "\nRemaining pipeline stages are commented out." << std::endl;
         std::cout << "This implementation focuses only on batch FFT and Peak Detection processing." << std::endl;
         
-        // Clean up resources
-        // Cleanup persistent arrays if they were initialized
-        if (BatchPeakDetection::persistent_arrays_initialized) {
-            std::cout << "Cleaning up persistent arrays for batch peak detection..." << std::endl;
-            BatchPeakDetection::cleanupPersistentArrays();
-        }
-        
-        // Free memory for batch frames
-        for (auto& frame : frames) {
-            frame.free_device();
-        }
-        
-        // Free memory for batch peak info
-        for (auto& pi : peakInfos) {
-            pi.free_peakInfo_device();
-            pi.free_peakInfo_host();
-        }
-        
-        // Clean up shared resources using the centralized function
-        // Note: For batch processing, we've already handled frame and peakinfo separately above
-        // so we pass nullptr for those parameters to avoid double cleanup
-        RadarData::cleanupRadarResources(nullptr, nullptr, &doaInfo, &targetResults, false, false);
+        // Use the centralized batch cleanup function
+        RadarData::cleanupBatchResources(
+            frames,                                    // Vector of frames
+            peakInfos,                                 // Vector of peak infos
+            doaInfo,                                   // DoA info
+            targetResults,                             // Target results
+            BatchPeakDetection::persistent_arrays_initialized,  // Whether persistent arrays were initialized
+            &BatchPeakDetection::cleanupPersistentArrays       // Function to cleanup persistent arrays
+        );
         
         std::cout << "\nProcessing pipeline complete." << std::endl;
         

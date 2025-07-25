@@ -226,6 +226,28 @@ namespace RadarData {
         DoAInfo& doaInfo,
         TargetResults& targetResults
     );
+    
+    /**
+     * Clean up all resources associated with batch processing
+     * 
+     * This function centralizes all memory cleanup operations for batch processing,
+     * including persistent arrays, frame arrays, and other radar data structures.
+     * 
+     * @param frames Vector of radar frames to clean up
+     * @param peakInfos Vector of peak detection information structures to clean up
+     * @param doaInfo Direction of arrival information structure to clean up
+     * @param targetResults Target processing results structure to clean up
+     * @param persistentArraysInitialized Whether persistent arrays have been initialized
+     * @param cleanupPersistentArrays Function pointer to cleanup persistent arrays
+     */
+    void cleanupBatchResources(
+        std::vector<Frame>& frames,
+        std::vector<peakInfo>& peakInfos,
+        DoAInfo& doaInfo,
+        TargetResults& targetResults,
+        bool persistentArraysInitialized,
+        void (*cleanupPersistentArrays)()
+    );
 }
 
 #endif // DATA_TYPES_H

@@ -638,4 +638,55 @@ void cleanupRadarResources(
     cleanupRadarResources(&frame, &peakinfo, &doaInfo, &targetResults, true, true);
 }
 
+/**
+ * Clean up all resources associated with batch processing
+ * 
+ * This function centralizes all memory cleanup operations for batch processing,
+ * including persistent arrays, frame arrays, and other radar data structures.
+ * 
+ * @param frames Vector of radar frames to clean up
+ * @param peakInfos Vector of peak detection information structures to clean up
+ * @param doaInfo Direction of arrival information structure to clean up
+ * @param targetResults Target processing results structure to clean up
+ * @param persistentArraysInitialized Whether persistent arrays have been initialized
+ * @param cleanupPersistentArrays Function pointer to cleanup persistent arrays
+ */
+void cleanupBatchResources(
+    std::vector<Frame>& frames,
+    std::vector<peakInfo>& peakInfos,
+    DoAInfo& doaInfo,
+    TargetResults& targetResults,
+    bool persistentArraysInitialized,
+    void (*cleanupPersistentArrays)()
+) {
+    // First, clean up any persistent arrays used for batch processing
+    if (persistentArraysInitialized && cleanupPersistentArrays) {
+        std::cout << "Cleaning up persistent arrays for batch peak detection..." << std::endl;
+        cleanupPersistentArrays();
+    }
+    
+    // Clean up frame resources
+    for (auto& frame : frames) {
+        frame.free_device();
+    }
+    
+    // Clean up peak info resources
+    for (auto& pi : peakInfos) {
+        pi.free_peakInfo_device();
+        pi.free_peakInfo_host();
+    }
+    
+    // Clean up other shared resources
+    doaInfo.free_angles_device();
+    doaInfo.free_R_device();
+    doaInfo.free_eigenData();
+    doaInfo.free_noiseSubspace();
+    doaInfo.free_steeringVector();
+    
+    // Clean up target results
+    targetResults.free_device();
+    
+    std::cout << "Batch processing resources cleaned up successfully" << std::endl;
+}
+
 } // namespace RadarData

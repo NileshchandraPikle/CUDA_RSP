@@ -1,2 +1,0 @@
-/usr/bin/ar qc libtarget.a CMakeFiles/target.dir/target_processing.cu.o
-/usr/bin/ranlib libtarget.a
